@@ -140,6 +140,34 @@
 - [ ] **DRIFT-09**: 每条漂移测量同时记录 `model_snapshot` + `prompt_version` + 对照臂结果；三者缺一则该次测量不得用于回滚决策
 - [ ] **DRIFT-10**: `prompt_version` 使用内容哈希而非手工递增
 
+### 评测与指标 (EVAL)
+
+- [ ] **EVAL-01**: 北极星指标为「内容判对率 × 人格演化可解释性」；**留存与会话时长仅作为健康度护栏，不得作为优化目标**〔第八条(五)、第十条第二款；第二十三条(四)要求安全评估报告使用时长〕
+- [ ] **EVAL-02**: 判对率拆分为**表层判对率**与**内容判对率**（评审只看纯文本，去除格式与时间戳），后者才作为人格质量代理〔UCSD 数据：GPT-4.5 带人设 73% / 不带 36%；GPT-4o 不带人设 21%，低于 1966 年 ELIZA 的 23%〕
+- [ ] **EVAL-03**: 「真人被误判为 AI 的比率」作为常态校准项，提供表层线索的噪声地板
+- [ ] **EVAL-04**: 拟真包装（延迟、分条、错字）在 P1 一次做到位并**冻结**，之后不作为优化变量〔否则持续污染所有人格实验读数〕
+- [ ] **EVAL-05**: 提供三维制衡指标与配对反向指标，防止单指标被 Goodhart 化
+- [ ] **EVAL-06**: 内部盲测作为评测工具存在，参与者均为知情的内部人员〔规避第十八条无条件标识义务的争议〕
+- [ ] **EVAL-07**: `packages/statdiff` 为人格漂移判定与研究侧分布对比的**唯一**实现〔避免「什么算显著差异」出现两个互相矛盾的答案〕
+
+### 平台与基础设施 (PLAT)
+
+- [ ] **PLAT-01**: 单 pnpm workspace，两个部署单元：`apps/web`（仅 UI）与 `apps/api`（REST + WebSocket + pg-boss worker）
+- [ ] **PLAT-02**: 单 PostgreSQL 18.6 同时承载 OLTP + pgvector 0.8.6（`halfvec(1024)` + HNSW 余弦）+ pg-boss 12.34 队列
+- [ ] **PLAT-03**: 所有 LLM 调用必经 Model Router；模型可 pin 性维护为**显式表**，不以命名规则推断
+- [ ] **PLAT-04**: Model Router 支持「按快照名强制路由、禁止别名解析」的调用模式，供 DRIFT-02 对照臂使用
+- [ ] **PLAT-05**: 5 个语义模型角色各自独立配置：`chat.reply`、`chat.reply.frontier`、`persona.reflect`、`persona.probe`、`memory.extract`/`safety.classify`
+- [ ] **PLAT-06**: 存在 ESLint 规则禁止 AI SDK 的 `model: "provider/name"` 字符串写法〔该写法默认路由到境外 AI Gateway，照官方文档抄即构成数据出境〕
+- [ ] **PLAT-07**: 海外模型通道**只接受 synthetic 输入**，真实用户对话不得流向境外
+- [ ] **PLAT-08**: 提示词真相源在 git 中，不托管于可观测性平台
+- [ ] **PLAT-09**: 提示缓存前缀逐 token 稳定，禁止在 system 或人格档案位置插入时间戳等变动内容〔缓存命中价为输入价 1/5〕
+- [ ] **PLAT-10**: 单次请求上下文预算上限 28k token〔doubao-seed-character 在 32k 处输出单价从 ¥2 跳至 ¥6，档位边界是悬崖不是斜坡〕
+- [ ] **PLAT-11**: 成本按语义角色（purpose）维度拆解可观测，而非只有总额
+- [ ] **PLAT-12**: 夜间反思读结构化要点而非全部原文〔否则成本是「角色数 × 全站流量」的乘积〕
+
+
+---
+
 ### M1 必须预留的 M2 能力
 
 以下三条虽属 M2 类别，但**必须在 M1 完成** —— 事后补建的代价不可接受：
@@ -198,34 +226,6 @@
 - [ ] **PII-05**: 维护 ≥500 条中文金标集并纳入 CI，召回率低于阈值即构建失败〔没有金标集的 PII 检测等于没有 PII 检测〕
 - [ ] **PII-06**: 检测器版本落库，支持历史数据按新版本重跑
 - [ ] **PII-07**: PII 检测在写入管道内执行，不作为事后批处理
-
-### 评测与指标 (EVAL)
-
-- [ ] **EVAL-01**: 北极星指标为「内容判对率 × 人格演化可解释性」；**留存与会话时长仅作为健康度护栏，不得作为优化目标**〔第八条(五)、第十条第二款；第二十三条(四)要求安全评估报告使用时长〕
-- [ ] **EVAL-02**: 判对率拆分为**表层判对率**与**内容判对率**（评审只看纯文本，去除格式与时间戳），后者才作为人格质量代理〔UCSD 数据：GPT-4.5 带人设 73% / 不带 36%；GPT-4o 不带人设 21%，低于 1966 年 ELIZA 的 23%〕
-- [ ] **EVAL-03**: 「真人被误判为 AI 的比率」作为常态校准项，提供表层线索的噪声地板
-- [ ] **EVAL-04**: 拟真包装（延迟、分条、错字）在 P1 一次做到位并**冻结**，之后不作为优化变量〔否则持续污染所有人格实验读数〕
-- [ ] **EVAL-05**: 提供三维制衡指标与配对反向指标，防止单指标被 Goodhart 化
-- [ ] **EVAL-06**: 内部盲测作为评测工具存在，参与者均为知情的内部人员〔规避第十八条无条件标识义务的争议〕
-- [ ] **EVAL-07**: `packages/statdiff` 为人格漂移判定与研究侧分布对比的**唯一**实现〔避免「什么算显著差异」出现两个互相矛盾的答案〕
-
-### 平台与基础设施 (PLAT)
-
-- [ ] **PLAT-01**: 单 pnpm workspace，两个部署单元：`apps/web`（仅 UI）与 `apps/api`（REST + WebSocket + pg-boss worker）
-- [ ] **PLAT-02**: 单 PostgreSQL 18.6 同时承载 OLTP + pgvector 0.8.6（`halfvec(1024)` + HNSW 余弦）+ pg-boss 12.34 队列
-- [ ] **PLAT-03**: 所有 LLM 调用必经 Model Router；模型可 pin 性维护为**显式表**，不以命名规则推断
-- [ ] **PLAT-04**: Model Router 支持「按快照名强制路由、禁止别名解析」的调用模式，供 DRIFT-02 对照臂使用
-- [ ] **PLAT-05**: 5 个语义模型角色各自独立配置：`chat.reply`、`chat.reply.frontier`、`persona.reflect`、`persona.probe`、`memory.extract`/`safety.classify`
-- [ ] **PLAT-06**: 存在 ESLint 规则禁止 AI SDK 的 `model: "provider/name"` 字符串写法〔该写法默认路由到境外 AI Gateway，照官方文档抄即构成数据出境〕
-- [ ] **PLAT-07**: 海外模型通道**只接受 synthetic 输入**，真实用户对话不得流向境外
-- [ ] **PLAT-08**: 提示词真相源在 git 中，不托管于可观测性平台
-- [ ] **PLAT-09**: 提示缓存前缀逐 token 稳定，禁止在 system 或人格档案位置插入时间戳等变动内容〔缓存命中价为输入价 1/5〕
-- [ ] **PLAT-10**: 单次请求上下文预算上限 28k token〔doubao-seed-character 在 32k 处输出单价从 ¥2 跳至 ¥6，档位边界是悬崖不是斜坡〕
-- [ ] **PLAT-11**: 成本按语义角色（purpose）维度拆解可观测，而非只有总额
-- [ ] **PLAT-12**: 夜间反思读结构化要点而非全部原文〔否则成本是「角色数 × 全站流量」的乘积〕
-
-
----
 
 ## v2 Requirements — 竞技场、AI 社交与公开上线（P8–P10）
 
@@ -288,17 +288,149 @@
 
 ## Traceability
 
-由 roadmapper 在创建 ROADMAP.md 时填充。每条 v1 需求须映射到恰好一个 phase。
+由 roadmapper 于 2026-09-25 依据 `.planning/ROADMAP.md` 填充。每条 M1 需求映射到**恰好一个** phase。
+
+**Phase 速查：**
+
+| Phase | 名称 | 需求数 |
+|---|---|---|
+| Phase 1 | 合规安全地基 + 会话骨架 | 44 |
+| Phase 2 | 拟真对话基线 + 探针与指标 | 27 |
+| Phase 3 | 记忆与遗忘 | 9 |
+| Phase 4 | 人格内核与静态画像 | 11 |
+| Phase 5 | 演化引擎 + 五层护栏 + 疏远机制 | 26 |
+
+**两处需要留意的跨类别映射：**
+
+- **SAFE-03/04/05 在 Phase 1，SAFE-06..12 在 Phase 5。** SAFE-15（「危机干预与疏远机制不得分期」）映射到 Phase 5，在那里以「重跑 Phase 1 危机探针集 + risk≥watch 时温度 clamp 单元测试」的形式验证。危机路径**严格早于**疏远机制上线，因此第三十条 10万–20万 罚档的窗口期不存在。
+- **SAFE-07 在 Phase 2 而非 Phase 5。** REAL-05 明文标注「与 SAFE-07 同一实现」，而 REAL-05 属 Phase 2；把永不 ghosting 的地板推到 Phase 5 会让「偶尔已读不回」先于其护栏上线。
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| （待 roadmapper 填充） | | |
+| COMPLY-01 | Phase 1 | Pending |
+| COMPLY-02 | Phase 1 | Pending |
+| COMPLY-03 | Phase 1 | Pending |
+| COMPLY-04 | Phase 1 | Pending |
+| COMPLY-05 | Phase 1 | Pending |
+| COMPLY-06 | Phase 1 | Pending |
+| COMPLY-07 | Phase 1 | Pending |
+| COMPLY-08 | Phase 1 | Pending |
+| COMPLY-09 | Phase 1 | Pending |
+| COMPLY-10 | Phase 1 | Pending |
+| COMPLY-11 | Phase 1 | Pending |
+| SAFE-01 | Phase 1 | Pending |
+| SAFE-02 | Phase 1 | Pending |
+| SAFE-03 | Phase 1 | Pending |
+| SAFE-04 | Phase 1 | Pending |
+| SAFE-05 | Phase 1 | Pending |
+| SAFE-06 | Phase 5 | Pending |
+| SAFE-07 | Phase 2 | Pending |
+| SAFE-08 | Phase 5 | Pending |
+| SAFE-09 | Phase 5 | Pending |
+| SAFE-10 | Phase 5 | Pending |
+| SAFE-11 | Phase 5 | Pending |
+| SAFE-12 | Phase 5 | Pending |
+| SAFE-13 | Phase 5 | Pending |
+| SAFE-14 | Phase 1 | Pending |
+| SAFE-15 | Phase 5 | Pending |
+| PRIV-01 | Phase 1 | Pending |
+| PRIV-02 | Phase 1 | Pending |
+| PRIV-03 | Phase 1 | Pending |
+| PRIV-04 | Phase 1 | Pending |
+| PRIV-05 | Phase 1 | Pending |
+| PRIV-06 | Phase 1 | Pending |
+| PRIV-07 | Phase 1 | Pending |
+| PRIV-08 | Phase 1 | Pending |
+| PRIV-09 | Phase 1 | Pending |
+| PRIV-10 | Phase 1 | Pending |
+| CHAT-01 | Phase 1 | Pending |
+| CHAT-02 | Phase 1 | Pending |
+| CHAT-03 | Phase 1 | Pending |
+| CHAT-04 | Phase 1 | Pending |
+| CHAT-05 | Phase 1 | Pending |
+| CHAT-06 | Phase 1 | Pending |
+| CHAT-07 | Phase 1 | Pending |
+| CHAT-08 | Phase 4 | Pending |
+| REAL-01 | Phase 2 | Pending |
+| REAL-02 | Phase 2 | Pending |
+| REAL-03 | Phase 2 | Pending |
+| REAL-04 | Phase 2 | Pending |
+| REAL-05 | Phase 2 | Pending |
+| REAL-06 | Phase 2 | Pending |
+| REAL-07 | Phase 2 | Pending |
+| MEM-01 | Phase 3 | Pending |
+| MEM-02 | Phase 3 | Pending |
+| MEM-03 | Phase 3 | Pending |
+| MEM-04 | Phase 3 | Pending |
+| MEM-05 | Phase 3 | Pending |
+| MEM-06 | Phase 3 | Pending |
+| MEM-07 | Phase 3 | Pending |
+| MEM-08 | Phase 3 | Pending |
+| MEM-09 | Phase 3 | Pending |
+| PERS-01 | Phase 4 | Pending |
+| PERS-02 | Phase 4 | Pending |
+| PERS-03 | Phase 4 | Pending |
+| PERS-04 | Phase 4 | Pending |
+| PERS-05 | Phase 4 | Pending |
+| PERS-06 | Phase 4 | Pending |
+| PERS-07 | Phase 4 | Pending |
+| PERS-08 | Phase 5 | Pending |
+| PERS-09 | Phase 4 | Pending |
+| PERS-10 | Phase 4 | Pending |
+| EVOL-01 | Phase 5 | Pending |
+| EVOL-02 | Phase 5 | Pending |
+| EVOL-03 | Phase 5 | Pending |
+| EVOL-04 | Phase 5 | Pending |
+| EVOL-05 | Phase 5 | Pending |
+| EVOL-06 | Phase 5 | Pending |
+| EVOL-07 | Phase 5 | Pending |
+| EVOL-08 | Phase 5 | Pending |
+| EVOL-09 | Phase 5 | Pending |
+| EVOL-10 | Phase 5 | Pending |
+| EVOL-11 | Phase 4 | Pending |
+| EVOL-12 | Phase 5 | Pending |
+| EVOL-13 | Phase 5 | Pending |
+| EVOL-14 | Phase 5 | Pending |
+| EVOL-15 | Phase 5 | Pending |
+| DRIFT-01 | Phase 2 | Pending |
+| DRIFT-02 | Phase 2 | Pending |
+| DRIFT-03 | Phase 5 | Pending |
+| DRIFT-04 | Phase 2 | Pending |
+| DRIFT-05 | Phase 2 | Pending |
+| DRIFT-06 | Phase 2 | Pending |
+| DRIFT-07 | Phase 2 | Pending |
+| DRIFT-08 | Phase 5 | Pending |
+| DRIFT-09 | Phase 2 | Pending |
+| DRIFT-10 | Phase 2 | Pending |
+| EVAL-01 | Phase 2 | Pending |
+| EVAL-02 | Phase 2 | Pending |
+| EVAL-03 | Phase 2 | Pending |
+| EVAL-04 | Phase 2 | Pending |
+| EVAL-05 | Phase 2 | Pending |
+| EVAL-06 | Phase 2 | Pending |
+| EVAL-07 | Phase 2 | Pending |
+| PLAT-01 | Phase 1 | Pending |
+| PLAT-02 | Phase 1 | Pending |
+| PLAT-03 | Phase 1 | Pending |
+| PLAT-04 | Phase 2 | Pending |
+| PLAT-05 | Phase 1 | Pending |
+| PLAT-06 | Phase 1 | Pending |
+| PLAT-07 | Phase 1 | Pending |
+| PLAT-08 | Phase 1 | Pending |
+| PLAT-09 | Phase 2 | Pending |
+| PLAT-10 | Phase 2 | Pending |
+| PLAT-11 | Phase 2 | Pending |
+| PLAT-12 | Phase 5 | Pending |
+| IFC-08 | Phase 1 | Pending |
+| RES-02 | Phase 1 | Pending |
+| RES-03 | Phase 1 | Pending |
 
 **Coverage:**
 - M1 requirements: 117 total（含 IFC-08 / RES-02 / RES-03 三条预留）
 - M2 requirements: 32 total
-- Mapped to phases: 0
-- Unmapped: 117 ⚠️（roadmapper 只需映射 M1）
+- Mapped to phases: 117 ✓
+- Unmapped: 0 ✓
+- Duplicates: 0 ✓
 
 ---
 
