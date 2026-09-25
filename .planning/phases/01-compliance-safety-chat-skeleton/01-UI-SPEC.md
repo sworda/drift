@@ -1,9 +1,12 @@
 ---
 phase: "1"
 slug: "compliance-safety-chat-skeleton"
-status: draft
+status: approved
+reviewed_at: "2026-09-26"
+reviewed_by: "gsd-ui-checker（revision pass 1 · 7 维度无 BLOCK）"
 shadcn_initialized: false
 preset: "radix + @shadcn/theme-slate + 自定义 --primary —— 在 STACK.md §13 建好的 apps/web 内 init，不使用 --template（见 ## Design System）"
+preset_field_note: "本字段是**设计预设的描述**，不是 shadcn CLI `-p, --preset` 的取值。CLI 的 --preset 有自己的取值域（例如 --defaults 等价于 --template=next --preset=base-nova）；不得把本字段的内容原样传给 --preset。实际命令见 ## Design System 的两步预设。"
 created: "2026-09-25"
 ---
 
@@ -118,11 +121,25 @@ Declared values（全部为 4 的倍数）：
 | 2xl | 48px | 主要区段断点（注册页每一步之间） |
 | 3xl | 64px | 页面级留白（空态与回执页的上边距） |
 
-标准集为 4 / 8 / 16 / 24 / 32 / 48 / 64。**任何标准集外的档位都必须在下面列出理由** —— 这样「偏离必须带理由」可以直接从文档结构上机械核对：scale 表里带〔标准集外〕标记的行数必须等于 Exceptions 的条数。
+标准集为 4 / 8 / 16 / 24 / 32 / 48 / 64。**任何标准集外的档位都必须在下面列出理由** —— 这样「偏离必须带理由」可以直接从文档结构上机械核对。
 
-Exceptions（四条，全部有非样式理由）：
+**断言（可直接执行，两数必须相等；当前 1 = 1）：**
+
+```bash
+# scale 表里带〔标准集外〕标记的「表格行」数（只数以 | 开头的行，不数正文里对该标记的引述）
+grep -c '^|.*〔标准集外' 01-UI-SPEC.md
+# A 组的条数
+sed -n '/^### A 组/,/^### B 组/p' 01-UI-SPEC.md | grep -c '^[0-9]\+\. \*\*'
+```
+
+B 组是固定尺寸约定，不是 scale 档位，因此**不参与**该计数 —— 上一轮把两组合并计数，导致该规则在本文档上
+1 ≠ 4 当场不成立（checker Recommendation 2），现已拆开并把计数范围限定到表格行。
+
+### A 组 —— scale 偏离（必须与 scale 表的〔标准集外〕标记一一对应）
 
 1. **12px（`md-tight`）** —— 气泡水平内边距与会话行水平内边距。标准集里没有这一档，但 16px 在 375px 宽视口下会让气泡与会话行明显过于疏松，与「类微信的高密度 IM 观感」这一第一性目标冲突；8px 则让 16px 正文贴边。12 = 4×3，仍是 4 的倍数。作用域限于气泡与列表行的水平内边距，**不得**外溢为通用间距。
+### B 组 —— 固定尺寸约定（不是 scale 档位，不参与 A 组计数；全部为 4 的倍数）
+
 2. **44px** —— 所有 icon-only 触控目标的最小尺寸（返回、发送、表情、更多）。iOS HIG 最小触控尺寸；44 = 4×11，仍是 4 的倍数。
 3. **72px** —— 会话列表单行固定高度（头像 48 + 上下 12）。固定行高是虚拟滚动与「未读数位置不跳动」的前提。
 4. **32px** —— 聊天页顶部 AI 常驻提示条的高度〔法定〕。不得因「太占地方」压到 32px 以下；文字 13px 在 32px 条内垂直居中。
@@ -185,14 +202,21 @@ Exceptions（四条，全部有非样式理由）：
 | 前景 | 背景 | 比值 | 判定 |
 |------|------|------|------|
 | `#0F172A` 主文本 | `#FFFFFF` / `#F6F7F9` | 17.9 / 16.7 | ✅ |
-| `#556070` 次级文本（时间戳、同意项副行） | `#FFFFFF` / `#F6F7F9` | 6.4 / 6.0 | ✅ |
-| `#5F6B7C` 占位符 | `#FFFFFF` / `#F6F7F9` / `#ECEEF3` | 5.4 / 5.1 / 4.7 | ✅ |
+| `#556070` 次级文本（时间戳、同意项副行） | `#FFFFFF` / `#F6F7F9` | 6.4 / 5.95 | ✅ |
+| `#5F6B7C` 占位符 | `#FFFFFF` / `#F6F7F9` / `#ECEEF3` | 5.4 / 5.05 / 4.7 | ✅ |
 | `#334155` AI 标识文字 | AI-label 面 `#D8E0EA` | 7.8 | ✅ |
 | AI-label 描边 `#64748B` | `#FFFFFF` / `#F6F7F9` / 自身面色 | 4.8 / 4.4 / 3.6 | ✅（1.4.11 非文字 3:1） |
 | `#92400E` care 文字 | care 面 `#FFFBEB` | 6.8 | ✅ |
 | `#FFFFFF` | accent `#5B5BD6`（主 CTA / 用户气泡） | 5.4 | ✅ |
 | `#FFFFFF` | destructive `#DC2626` | 4.8 | ✅ |
 | ~~`#94A3B8`~~ | `#FFFFFF` / `#F6F7F9` | 2.6 / 2.4 | ❌ 故降级为 Neutral non-text，禁止承载文字 |
+| ~~`#556070` 次级文本~~ | ~~accent `#5B5BD6` / destructive `#DC2626`~~ | 1.2 / 1.4 | ❌〔**禁止的组合**〕见下 |
+
+**〔禁止的组合〕次级文本 token 不得置于 accent 或 destructive 填充之上。** 二者比值仅 1.2:1 / 1.4:1。
+直接后果：**用户气泡（accent 填充）内不承载任何次级文本 —— 时间戳在气泡外的 `message` 行布局中**，
+与 `## Component Inventory` 的 `message` 行（「承载头像 + 气泡 + 时间戳的一行布局」）一致。填充块上只允许
+`#FFFFFF`（已在表内，5.4 / 4.8）。若将来确需在 accent 填充上放次级文字，必须先为它单列一个 token 并补进本表 ——
+不得复用 `#556070`。
 
 **占位符不得是说明文字的唯一载体。** 注册页（年龄、紧急联系人）与删除确认短语输入框的说明必须放在 `Field` 的 description 行（13px / `#556070`），占位符只做格式示例。理由：占位符在获得输入后会消失，即使对比度达标也不是持久可读的说明。
 
@@ -298,6 +322,10 @@ SAFE-04 的「及时联络」是一个**服务端异步动作**，不是渲染�
 | Empty state body（角色库已全部添加） | 回到会话列表继续聊天。更多角色会陆续加入。 |
 | Empty state heading（删除后再次导出） | 这里已经没有你的数据了 |
 | Empty state body（删除后再次导出） | 你在 {删除时间} 删除了全部数据。新产生的对话会重新出现在这里。 |
+| Empty state heading（聊天界面 · 新会话无消息） | 还没有开始 |
+| Empty state body（聊天界面 · 新会话无消息） | 说点什么，{角色名} 会回你。 |
+| Error state（列表加载失败 · 角色库 / 会话列表 / 角色详情） | 没能加载出来 —— 网络或服务器暂时没有响应。点「重试」再试一次。〔与空态必须可区分，不得静默渲染成空列表〕 |
+| Error state（删除没有完成 · PRIV-05） | 删除**没有**全部完成：已清除 **{M}** 处存储位置，还有 **{N}** 处没能清除 —— 这部分数据仍然存在。请再试一次；如果反复失败，请从隐私中心提交申诉，我们会人工清除并回复你。 |
 | Error state（消息发送失败） | 这条消息没有发出去 —— 网络似乎断开了。点这条消息重试。 |
 | Error state（重连中 · CHAT-07） | 连接断开，正在重新连接…… 重连后会自动补齐这段时间的消息。 |
 | Error state（导出失败） | 导出没有完成。你的数据没有受到影响，重试一次即可。 |
@@ -355,6 +383,10 @@ SAFE-04 的「及时联络」是一个**服务端异步动作**，不是渲染�
 - 平台口吻使用「我们」；角色口吻使用第一人称。**关怀卡片一律用「我们」** —— 这是 R1.24 的语言层落实。
 - 不用感叹号，不用 emoji（用户消息内的表情除外 —— 那是 CHAT-04 的内容，不是界面文案）。
 - 错误文案必须含「下一步做什么」，禁止只描述问题。
+  - **唯一豁免：法定终态拒绝。** 当拒绝本身就是法律要求的终局结果（本阶段仅
+    `Error state（年龄未满 18 · COMPLY-07）` 一条），不受该规则约束 —— 此时任何「下一步」都在引导用户
+    绕过年龄门槛（提示「换个年龄再试」即等于教人造假）。该行已按此豁免标注，**不得**为满足格式而补一个行动。
+    新增任何终态拒绝文案必须在此列名，否则默认适用「必须含下一步」。
 
 ---
 
@@ -380,30 +412,102 @@ SAFE-04 的「及时联络」是一个**服务端异步动作**，不是渲染�
 
 > 状态覆盖契约。空态与错误态的**文案**在 `## Copywriting Contract`，本节只管**状态覆盖**并引用那些行，不重复文案。
 
-Applicable state considerations resolved: **14 covered, 3 backstop, 1 unresolved**
+**探针口径。** 本节由 `ui-consideration-probe` 生成后逐条解析（orchestrator 于 checker 批准后执行，
+非作者自评）。12 个用户可见面按 `## 本阶段覆盖的用户可见面` 枚举，各自指派 element kinds（启发式分类器
+对中文 prose 失效 —— 12 个面里 7 个返回 `unclassified`，故 kinds 为 authored override，已人工确认无遗漏），
+再按相关性过滤 raise 适用类目。
+
+| 面 | Element kinds |
+|---|---|
+| E1 注册 / onboarding | `form` |
+| E2 预设角色库 | `list-collection` + `media` |
+| E3 会话列表 | `list-collection` |
+| E4 聊天消息流 | `list-collection` |
+| E5 输入栏与 icon-only 控件 | `form` + `interactive-control` + `nav` |
+| E6 角色详情页 | `static-content` + `interactive-control` |
+| E7 AI 标识常驻条与四处徽标〔法定〕 | `static-content` |
+| E8 两级危机干预卡片〔法定〕 | `static-content` + `list-collection` + `interactive-control` |
+| E9 隐私中心 | `form` + `list-collection` + `nav` + `interactive-control` |
+| E10 删除回执页 | `static-content` + `list-collection` |
+| E11 硬退出结果态〔法定〕 | `static-content` |
+| E12 时长 / 过度依赖提醒 `Dialog` | `interactive-control` + `static-content` |
+
+**未指派的 kinds 与理由**（避免为假设需求设计）：E4 未指派 `media` —— Phase 1 只有文本消息，图片/语音属
+Phase 2；E7 未指派 `interactive-control` —— 本契约明确 AI 徽标不可点击且禁止 tooltip 作唯一来源。二者若
+将来成立，需回到本节补指派并重跑探针。
+
+Applicable state considerations: **68** — **56 covered（explicit）/ 6 backstop / 5 dismissed（带理由）/ 1 unresolved**
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
-| empty | 会话列表 | ✅ covered | 无会话时渲染 `Empty` 容器 + Copywriting「还没有任何对话」行 + 「浏览角色库」CTA |
-| empty | 角色库 | ✅ covered | 全部角色已添加时渲染「预设角色都已经在你的列表里了」行；不出现空白页 |
-| empty | 隐私中心导出（删除后） | ✅ covered | 删除后导出返回空集，渲染「这里已经没有你的数据了」行并显示删除时间戳（阶段成功标准 4 的可见证据） |
-| loading | 会话列表 / 角色库首屏 | ✅ covered | `Skeleton` 渲染固定 72px 行高的骨架 ×6，行高与真实行一致，加载完成不产生布局跳动 |
-| loading | 消息发送中 | ✅ covered | 气泡右下角 `Spinner`（12px），成功后替换为时间戳 |
-| loading | 一键导出打包 | ✅ covered | `Progress` + 「正在打包你的数据」；超过 10s 追加「数据较多，还在继续」 |
-| error | 消息发送失败 | ✅ covered | 气泡左侧「重试」控件（**图标 ＋ 13px 可见文字「重试」**，`aria-label`「重试发送这条消息」，≥44×44；红色只作冗余强化，不是唯一手段）+ Copywriting「这条消息没有发出去」行，点击气泡或该控件均可重试 |
-| error | 注册提交（COMPLY-06） | ✅ covered | 提交失败**保留已填内容**（不清空表单）+ Copywriting「注册没有完成」行 + 「重试提交」按钮；字段级不通过渲染「这个联系方式我们没法识别」行，焦点移到第一个出错字段 |
-| error | 同意项撤回写入失败（PRIV-02） | ✅ covered | `Switch` **回弹到服务端的真实状态**（禁止乐观置为已撤回）+ Copywriting「这项同意没有撤回成功」行 —— 该行必须明示「数据流仍在继续」并给出重试 / 导出留副本 / 提交申诉三个出路 |
-| error | 二级危机卡片的紧急联系人联络（SAFE-04） | ✅ covered | 四态 `pending / delivered / failed / unavailable` 全部有渲染分支，文案见 Copywriting「紧急联系人联络状态」四行；非 `delivered` 时禁止出现「已经联系了」措辞；`failed` / `unavailable` 把热线行与 `tel:` 直呼按钮提到卡片首屏第一行 |
-| error | WebSocket 断连 | ✅ covered | 顶部细条 + Copywriting「连接断开，正在重新连接」行；该细条位于 AI 常驻条**下方**，不得遮挡 AI 常驻条〔法定〕 |
-| populated | 聊天界面 | ✅ covered | 用户气泡 accent 右对齐 / 角色气泡 secondary 左对齐 / 关怀卡片全宽无气泡形态 —— 三者视觉不可混淆（R1.24） |
-| zero-one-many | 未读数徽章 | ✅ covered | 0 不渲染徽章；1–99 显示数字；≥100 显示「99+」。徽章宽度自适应但行高固定 72px 不变 |
-| zero-one-many | 紧急联系人 | ✅ covered | 恰好 1 条（监护人或紧急联系人二选一，COMPLY-06）。UI 不提供「添加多个」，避免收集超出最小必要的第三方个人信息 |
-| long-text | 角色名 / 会话标题 × AI 徽标 | 🧪 backstop | 视觉 UI-state 测试：以 30 字角色名渲染会话行与聊天页头部，断言 AI `Badge` 仍完整可见（标题 `truncate`、徽标 `shrink-0`）。徽标被挤出即法定标识失效，故必须是持有的测试而非人工检查 |
-| long-text | 危机干预援助资源清单 | 🧪 backstop | 视觉 UI-state 测试：以超出视口高度的资源清单渲染二级卡片，断言卡片仍 sticky 置顶、**紧急联系人联络状态行**（四态中的任一态）始终在视口内、且卡片不可 dismiss；`failed` / `unavailable` 态下额外断言热线行与「拨打 12356」按钮出现在卡片首屏第一行 |
-| overflow | 单条超长消息气泡 | 🧪 backstop | 视觉 UI-state 测试：2000 字单条消息，断言 `max-w-[80%]` + `wrap-break-word` 生效、不产生横向滚动、不遮挡 AI 常驻条 |
-| partial | 断连期间的消息流（部分已补拉） | ⚠ unresolved | 补拉过程中「已补齐的区段」与「仍缺失的区段」如何在 UI 上区分尚未决定。planner 按假设处理：v1 补拉是原子的（补完才渲染），若后续改为流式补拉需回到本契约补一行 |
+| empty | E1 注册表单 | ✅ covered | 首次进入渲染空表单；每个字段的说明在 `Field` description 而非占位符；**四个同意项默认全部未勾选**，不存在预勾选与全选控件〔法定 · COMPLY-06〕 |
+| empty | E2 角色库 | ✅ covered | 全部角色已添加时渲染「预设角色都已经在你的列表里了」行；不出现空白页 |
+| empty | E3 会话列表 | ✅ covered | 无会话时渲染 `Empty` 容器 + Copywriting「还没有任何对话」行 + 「浏览角色库」CTA |
+| empty | E4 聊天消息流（新会话） | ✅ covered | 渲染 Copywriting「聊天空态」行；**32px AI 常驻条在空态下同样在场**，不得等到有消息才出现〔法定 · COMPLY-01〕 |
+| empty | E5 输入栏 | ✅ covered | 占位符「说点什么…」；发送按钮为禁用态图标（`#94A3B8`，Neutral non-text，不承载文字） |
+| empty | E8 危机资源清单 | ✅ covered | 服务端必须保证清单非空；**清单为空时 fail-closed 渲染固定兜底行（12356 与 120），不得渲染空卡片**〔法定 · SAFE-03〕 |
+| empty | E9 隐私中心导出（删除后） | ✅ covered | 删除后导出返回空集，渲染「这里已经没有你的数据了」行并显示删除时间戳（阶段成功标准 4 的可见证据） |
+| empty | E10 删除回执页 | ⛔ dismissed | 回执页只在删除动作**完成后**存在，不存在「无数据」态；且 `N=0` 不可达 —— 一次删除必然清除 ≥1 处存储位置，否则走 error / partial 分支 |
+| loading | E1 注册提交中 | ✅ covered | 提交按钮进入 pending 并禁用（防重复提交）；不加全屏遮罩，已填内容始终可见 |
+| loading | E2 角色库 / E3 会话列表 首屏 | ✅ covered | `Skeleton` 渲染固定 72px 行高的骨架 ×6，行高与真实行一致，加载完成不产生布局跳动 |
+| loading | E4 消息发送中 | ✅ covered | 气泡右下角 `Spinner`（12px）；受理后 `Spinner` 移除，时间戳在**气泡外**的 `message` 行布局中渲染（与 `## Component Inventory` 的 `message` 行一致 —— 时间戳**不在**气泡内，见 `## Color` 的〔禁止的组合〕行） |
+| loading | E5 输入栏发送中 | ✅ covered | 输入框**不清空**直到服务端受理；失败时内容仍在，可直接重试 |
+| loading | E6 角色详情页 | ✅ covered | 骨架屏**包含 AI 徽标位的占位**，徽标不得后到 —— 法定标识不允许有「闪缺」窗口〔法定 · COMPLY-01〕 |
+| loading | E8 紧急联系人联络中 | ✅ covered | `contact_attempt.status = pending` 分支，文案见 Copywriting「紧急联系人联络状态」；不得以 `Spinner` 为唯一表达；终态原地替换、卡片不重排、不夺焦点；超时由**服务端**置 `failed`，前端不得 `setTimeout` |
+| loading | E9 一键导出打包 | ✅ covered | `Progress` + 「正在打包你的数据」；超过 10s 追加「数据较多，还在继续」 |
+| loading | E10 删除执行中 | ✅ covered | 渲染 `Progress`，**执行完成后**才跳转回执页；不得在执行中提前跳转（否则回执数字不可信） |
+| loading | E12 提醒 `Dialog` | ⛔ dismissed | 计时权威在服务端、前端禁止 `setTimeout`（`## 交互契约`），Dialog 仅在收到服务端事件时渲染一次 —— UI 侧不存在加载窗口 |
+| error | E1 注册提交（COMPLY-06） | ✅ covered | 提交失败**保留已填内容**（不清空表单）+ Copywriting「注册没有完成」行 + 「重试提交」按钮；字段级不通过渲染「这个联系方式我们没法识别」行，焦点移到第一个出错字段 |
+| error | E2 角色库 / E3 会话列表 / E6 角色详情 加载失败 | ✅ covered | 渲染 Copywriting「列表加载失败」行 + 重试控件（同下方重试控件规则）；**不留白屏、不静默空态** —— 空态与加载失败必须可区分 |
+| error | E4 消息发送失败 | ✅ covered | 气泡左侧「重试」控件（**图标 ＋ 13px 可见文字「重试」**，`aria-label`「重试发送这条消息」，≥44×44；红色只作冗余强化，不是唯一手段）+ Copywriting「这条消息没有发出去」行，点击气泡或该控件均可重试 |
+| error | E5 输入栏 | ✅ covered | 复用上一行的重试控件与文案；输入内容不丢失 |
+| error | E8 紧急联系人联络（SAFE-04） | ✅ covered | 四态 `pending / delivered / failed / unavailable` 全部有渲染分支，文案见 Copywriting「紧急联系人联络状态」四行；**非 `delivered` 时禁止出现「已经联系了」措辞**；`failed` / `unavailable` 把热线行与 `tel:` 直呼按钮提到卡片首屏第一行〔法定〕 |
+| error | E4 WebSocket 断连 | ✅ covered | 顶部细条 + Copywriting「连接断开，正在重新连接」行；该细条位于 AI 常驻条**下方**，不得遮挡 AI 常驻条〔法定〕 |
+| error | E9 同意项撤回写入失败（PRIV-02） | ✅ covered | `Switch` **回弹到服务端的真实状态**（禁止乐观置为已撤回）+ Copywriting「这项同意没有撤回成功」行 —— 该行必须明示「数据流仍在继续」并给出重试 / 导出留副本 / 提交申诉三个出路 |
+| error | E10 删除失败（PRIV-05） | ✅ covered | 渲染 Copywriting「删除没有完成」行；**禁止渲染「已删除完成」**，须如实分列已清除 / 未能清除的处数并给出重试与申诉出路（与联络四态同一诚实性标准，见 PRIV-06 段） |
+| error | E12 提醒事件未送达 | ✅ covered | 服务端重试并在下次会话恢复时补发；UI **不做本地兜底计时**〔COMPLY-03 计时权威在服务端〕。前端不得因 Dialog 渲染失败而静默丢弃事件 —— 渲染失败须上报合规事件，否则「提醒没弹」是一次静默的合规失效 |
+| populated | E2 角色库 | ✅ covered | 典型 8–12 个预设角色：48px 头像 ＋ 角色名（20px）＋ 一句话简介（13px）；**列表内不放 accent**，行内不放按钮 |
+| populated | E3 会话列表 | ✅ covered | 72px 固定行高；首个带未读徽章的行是首读锚点（见 `## 视觉锚点契约`） |
+| populated | E4 聊天界面 | ✅ covered | 用户气泡 accent 右对齐 / 角色气泡 secondary 左对齐 / 关怀卡片全宽无气泡形态 —— 三者视觉不可混淆（R1.24） |
+| populated | E8 两级危机卡片 | ✅ covered | 一级内联 `Alert` 可关闭；二级 sticky 阻断 `Alert` 不可 dismiss；**两级均禁用 `Bubble` 形态**，使「伪装成角色发言」在组件层不可能（R1.24） |
+| populated | E9 「我们收集了什么」清单 | ✅ covered | 清单逐项对应**实际存储字段**，条数与内容由服务端返回，**UI 不硬编码** —— 否则清单与实现漂移即构成虚假陈述（PRIV-06 同一标准） |
+| populated | E10 删除回执 | ✅ covered | 「已删除完成。共清除 **{N}** 处存储位置：{逐项清单 + 时间戳}」〔PRIV-05 要求显示数量〕 |
+| partial | E1 注册表单部分填写 | ✅ covered | 跨步骤保留已填内容；**监护人或紧急联系人二选一填一个即视为完整**（COMPLY-06）；未完成不得提交，禁用主 CTA 而非提交后报错 |
+| partial | E2 角色头像缺失 | ✅ covered | 头像加载失败渲染 `Avatar` 的角色名首字 fallback，不留空洞、不改 72px 行高 |
+| partial | E3 会话无最后消息摘要 | ✅ covered | 新建会话尚无消息时摘要位渲染占位短句，**行高仍为 72px**（固定行高是未读徽章不跳动的前提） |
+| partial | E4 断连期间的消息流（部分已补拉） | ⚠ unresolved | **planner 须按假设处理**：补拉过程中「已补齐区段」与「仍缺失区段」如何在 UI 上区分尚未决定。假设 v1 补拉是原子的（补完才渲染）。若后续改为流式补拉，需回到本契约补一行 |
+| partial | E5 草稿未发送 | ✅ covered | 草稿按会话保留（切走再回来不丢），**不跨会话串用** |
+| partial | E8 联络状态未知 | ✅ covered | 状态未知**等同 `pending` 渲染**；任何情况下不得渲染「已联系」〔法定〕 |
+| partial | E9 部分同意已撤回 | ✅ covered | 撤回生效后对应字段**立即从「我们收集了什么」清单消失**（PRIV-02 即时生效），不留灰显残留项 |
+| partial | E10 部分存储位置删除失败 | ✅ covered | 回执必须如实分列「已清除 M 处 / 未能清除 N 处」，**禁止渲染「已删除完成」**；与 error 行同一诚实性标准 |
+| overflow | E2 角色库 | ✅ covered | 纵向滚动，不分页（Phase 1 预设角色量级小）；行内简介单行 `truncate` |
+| overflow | E3 会话列表行 | 🧪 backstop | 同下方 long-text 视觉测试：标题 `truncate` ＋ AI 徽标 `shrink-0`，徽标不得被挤出〔法定〕 |
+| overflow | E4 单条超长消息气泡 | 🧪 backstop | 视觉 UI-state 测试：2000 字单条消息，断言 `max-w-[80%]` + `wrap-break-word` 生效、不产生横向滚动、不遮挡 AI 常驻条 |
+| overflow | E5 输入框多行 | ✅ covered | 自增高至最多 5 行后**框内**滚动；不挤压消息流，**不得把 AI 常驻条挤出首屏**〔法定〕 |
+| overflow | E6 角色详情长简介 | ✅ covered | 页面纵向滚动；「角色名 ＋ AI 徽标」那一行 sticky，滚动中不移出视口〔法定 · COMPLY-01〕 |
+| overflow | E7 AI 常驻条 | ✅ covered | 条内 13px 文字单行、**不换行也不 `truncate`**（法定文本不得被截断）；窄视口下条高固定 32px 不变、文字缩至最小可读，**不得折叠或改为「更多」** |
+| overflow | E8 危机援助资源清单 | 🧪 backstop | 视觉 UI-state 测试：以超出视口高度的资源清单渲染二级卡片，断言卡片仍 sticky 置顶、**紧急联系人联络状态行**（四态中的任一态）始终在视口内、且卡片不可 dismiss；`failed` / `unavailable` 态下额外断言热线行与「拨打 12356」按钮出现在卡片首屏第一行 |
+| overflow | E9 清单与 `Tabs` | ✅ covered | 清单纵向滚动；`Tabs` 过多时**横向滚动**，不折叠为「更多」（隐私分区不得被藏起来） |
+| overflow | E10 回执逐项清单 | ✅ covered | 清单纵向滚动；「共清除 {N} 处」摘要行 sticky，始终在视口内 |
+| overflow | E11 硬退出系统卡片 | ✅ covered | 文案为契约固定短句，单屏可完整显示，不滚动 |
+| overflow | E12 提醒 `Dialog` | ✅ covered | 内容为固定短文，对话框不滚动；按钮单行不换行 |
+| zero-one-many | E2 角色库 | ✅ covered | 0 → 走 empty 行；**1 也用列表形态，不特殊化**；many 纵向滚动 |
+| zero-one-many | E3 未读数徽章 | ✅ covered | 0 不渲染徽章；1–99 显示数字；≥100 显示「99+」。徽章宽度自适应但行高固定 72px 不变 |
+| zero-one-many | E4 消息条数 | ✅ covered | 0 → 走 empty 行；1 条不特殊化；many 直接渲染并定位到底部（Phase 1 不做虚拟滚动） |
+| zero-one-many | E8 援助资源清单 | ✅ covered | 清单恒 ≥2 条（热线 ＋ 紧急联系人联络状态行）；**恰好 1 条时不改版式、不分页、不折叠**〔法定 —— 折叠等于把求助渠道藏起来〕 |
+| zero-one-many | E9 同意项与收集清单 | ⛔ dismissed | 同意项恒为 4 项（〔法定〕不可增删、不可合并）；收集清单恒 ≥1 项 —— **账号必要信息不可撤回**，故「0 项」不可达。0/1 分支无实现意义 |
+| zero-one-many | E1 紧急联系人 | ✅ covered | 恰好 1 条（监护人或紧急联系人二选一，COMPLY-06）。UI 不提供「添加多个」，避免收集超出最小必要的第三方个人信息 |
+| zero-one-many | E10 回执处数 | ✅ covered | 中文计数词天然规避单复数问题：`N=1` 渲染「共清除 1 处存储位置」，与 many 同一句式 |
+| long-text | E1 超长姓名 / 联系方式 | ✅ covered | 输入设 `maxlength`；已提交值在回显处单行 `truncate`，**不换行破坏表单布局**；完整值在 `title` 与可访问名称中保留 |
+| long-text | E5 icon-only 控件 | ✅ covered | 四个 icon-only 控件（返回 / 发送 / 插入表情 / 更多）无可见文字，由 `aria-label` 承载名称，**tooltip 不得作为唯一来源**；重试控件额外强制 13px 可见文字 |
+| long-text | E6 角色名 / 会话标题 × AI 徽标 | 🧪 backstop | 视觉 UI-state 测试：以 30 字角色名渲染会话行与聊天页头部，断言 AI `Badge` 仍完整可见（标题 `truncate`、徽标 `shrink-0`）。徽标被挤出即法定标识失效，故必须是持有的测试而非人工检查 |
+| long-text | E7 AI 标识文字 | 🧪 backstop | 同上测试覆盖徽标；常驻条文字为契约常量、长度恒定，由 overflow 行的「不换行不截断」规则约束 |
+| long-text | E8 超长紧急联系人姓名 | 🧪 backstop | 由 overflow 行的同一视觉测试断言：长姓名不得把联络状态行挤出视口 |
+| long-text | E9 长字段说明 | ✅ covered | 隐私说明**换行显示，不 `truncate`** —— 截断隐私说明即等于未告知（PRIV-06 作用域） |
+| long-text | E10 回执内容 | ⛔ dismissed | 回执全为系统生成的固定结构（处数 ＋ 位置名 ＋ 时间戳），无用户可控长文本 |
+| long-text | E11 硬退出文案 | ⛔ dismissed | 文案为契约固定常量，无变量插值，长度恒定 |
+| long-text | E12 提醒文案 | ⛔ dismissed | 两个 `Dialog` 的正文与按钮文案均为契约固定常量，无变量插值 |
 
----
 
 ## Registry Safety
 
