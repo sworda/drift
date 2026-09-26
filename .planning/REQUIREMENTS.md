@@ -69,8 +69,8 @@
 ### 聊天基础体验 (CHAT)
 
 - [ ] **CHAT-01**: 用户可浏览预设角色库并查看角色简介
-- [ ] **CHAT-02**: 用户可添加一个角色为好友，关系从「陌生人」开始
-- [ ] **CHAT-03**: 用户可在类微信的界面中与角色进行文字往返对话
+- [x] **CHAT-02**: 用户可添加一个角色为好友，关系从「陌生人」开始
+- [x] **CHAT-03**: 用户可在类微信的界面中与角色进行文字往返对话
 - [ ] **CHAT-04**: 用户可在消息中发送表情
 - [ ] **CHAT-05**: 用户可在会话列表看到全部会话及未读数
 - [ ] **CHAT-06**: 用户离线期间角色发送的消息，在用户回来时以未读形式完整呈现
@@ -156,7 +156,7 @@
 ### 平台与基础设施 (PLAT)
 
 - [x] **PLAT-01**: 单 pnpm workspace，两个部署单元：`apps/web`（仅 UI）与 `apps/api`（REST + WebSocket + pg-boss worker）
-- [ ] **PLAT-02**: 单 PostgreSQL 18.6 同时承载 OLTP + pgvector 0.8.6（`halfvec(1024)` + HNSW 余弦）+ pg-boss 12.34 队列
+- [x] **PLAT-02**: 单 PostgreSQL 18.6 同时承载 OLTP + pgvector 0.8.6（`halfvec(1024)` + HNSW 余弦）+ pg-boss 12.34 队列
 - [ ] **PLAT-03**: 所有 LLM 调用必经 Model Router；模型可 pin 性维护为**显式表**，不以命名规则推断
 - [ ] **PLAT-04**: Model Router 支持「按快照名强制路由、禁止别名解析」的调用模式，供 DRIFT-02 对照臂使用
 - [ ] **PLAT-05**: 5 个语义模型角色各自独立配置：`chat.reply`、`chat.reply.frontier`、`persona.reflect`、`persona.probe`、`memory.extract`/`safety.classify`
@@ -348,8 +348,8 @@
 | PRIV-10 | Phase 1 | Pending |
 | PRIV-11 | Phase 1 | Pending |
 | CHAT-01 | Phase 1 | Pending |
-| CHAT-02 | Phase 1 | Pending |
-| CHAT-03 | Phase 1 | Pending |
+| CHAT-02 | Phase 1 | Complete |
+| CHAT-03 | Phase 1 | Complete |
 | CHAT-04 | Phase 1 | Pending |
 | CHAT-05 | Phase 1 | Pending |
 | CHAT-06 | Phase 1 | Pending |
@@ -414,7 +414,7 @@
 | EVAL-06 | Phase 2 | Pending |
 | EVAL-07 | Phase 2 | Pending |
 | PLAT-01 | Phase 1 | Complete |
-| PLAT-02 | Phase 1 | Pending |
+| PLAT-02 | Phase 1 | Complete |
 | PLAT-03 | Phase 1 | Pending |
 | PLAT-04 | Phase 2 | Pending |
 | PLAT-05 | Phase 1 | Pending |

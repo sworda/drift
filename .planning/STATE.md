@@ -3,11 +3,11 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-09-26T11:19:09.305Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-09-26T13:49:57.234Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
-state_head: 74984e4a0b8446e37795001518dfe44a1e5dd296
+state_head: ef55d6d2775a08c94dcc3515456fc5faca88880d
 progress:
   total_phases: 5
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 ## Current Position
 
 Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 4 of 15
+Plan: 5 of 15
 Status: Ready to execute
 Last activity: 2026-09-26 — Phase 01 execution started
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P01 | 22 min | 3 tasks | 7 files |
 | Phase 01 P02 | 1h 1m | 3 tasks | 33 files |
 | Phase 01 P03 | 1h 22m | 3 tasks | 45 files |
+| Phase 01 P04 | 21 min | 3 tasks | 77 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,10 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: ws 与 process.env 两条包边界写进 eslint（ws 用 regex 而非 group），T-03-03 的 CI 放行构造断言搬进 ci:fast，都不再只是 PLAN 里的一次性 grep — 一条只在写代码那天跑过的 grep 与一条不存在的检查没有区别。group 形式会把相对路径 ./ws/server.ts 也算命中，会让「唯一导入者」退化成「谁都不能引用 ws 目录」
 - [Phase 01]: shadcn 的 @shadcn/theme-slate 已不在 registry（现 214 项、零 theme 条目），init 现在强制要求 --preset；改取 preset nova 并移除它注入的 next/font Geist，调色板由 tokens.css 按 UI-SPEC ## Color 表逐值落地 — UI-SPEC 的 preset_field_note 已预先授权此类处置；两步预设的实质是「冷灰中性基座 + 覆写 --primary」，由 tokens.css 完全满足。所有 preset 都带网络字体，与「零网络字体开销」这条法定项冲突
 - [Phase 01]: PG 18+ 官方镜像的数据卷挂载点是 /var/lib/postgresql 而非 /var/lib/postgresql/data；pnpm 12 写的 0600 lockfile 经 COPY 进镜像后非 root 用户读不到（两个 Dockerfile 都 chmod -R a+rX） — 两条都是实测踩到的部署坑。后者在 CI 的全新 clone 上复现不了（git 只存可执行位），只在构建上下文来自 pnpm 跑过的工作树时出现 —— 也就是本地构建与带缓存的 runner
+- [Phase 01]: 本 plan 一次性定型 Phase 1 全部 22 张表：message.provenance/audience（IFC-08，one-way）、persona_version 三元组带 model_snapshot（PERS-10）、七张审计表族 append-only 由 PG 权限保证（D-06）。 — 三类字段事后补不了：无法为历史消息补溯源、无法为已有版本补快照标识、同意的收集时机事后补收即事后追认。
+- [Phase 01]: drizzle-kit check 不连数据库，不能当漂移门禁；真正的门禁是 packages/db/scripts/assert-no-drift.mjs（drizzle-kit push + 断言 No changes detected 且输出无 pgboss）。 — 实测 check 在库与 schema 明显不一致时仍输出 Everything is fine 并退出 0。为了让「零漂移」可达，同时去掉了表达式 id 默认值与命名复合主键两处 drizzle-kit 往返噪声。
+- [Phase 01]: llm_call 按每次 provider 调用各自短事务落库，不横跨 provider 网络调用；角色消息另起短事务。 — 崩溃只可能留下「有 llm_call、没有消息」（安全方向），反向由调用顺序排除。横跨网络调用的事务会把连接池上限直接变成并发上限。
+- [Phase 01]: 不引入 @shadcn/react（message-scroller 的依赖）；chat-view 只用 bubble + message 两个原语加本地滚动锚定。 — UI-SPEC v1 明确不做虚拟滚动，该包唯一难自行实现的能力用不到；T-04-SC 禁止新增未经核验的包，而「脚手架顺手拉进来」正是它要拦的失效模式。
 
 ### Pending Todos
 
@@ -104,6 +109,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-26T11:16:12.357Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-09-26T13:49:01.772Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
