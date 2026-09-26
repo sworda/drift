@@ -1,0 +1,38 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "tools/ci/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/dist",
+    "tools/ci/fixtures/**",
+    "tools/ci/type-fixtures/**"
+  ],
+  "references": [
+    {
+      "path": "./packages/contract"
+    },
+    {
+      "path": "./packages/db"
+    },
+    {
+      "path": "./packages/llm"
+    },
+    {
+      "path": "./packages/safety"
+    },
+    {
+      "path": "./packages/prompts"
+    }
+  ]
+}

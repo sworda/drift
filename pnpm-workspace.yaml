@@ -1,0 +1,5 @@
+packages:
+  - 'packages/*'
+  - 'apps/*'
+minimumReleaseAgeExclude:
+  - '@types/node@24.19.0'

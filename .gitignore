@@ -1,0 +1,8 @@
+node_modules/
+.next/
+dist/
+.env*
+*.log
+var/export-artifacts/
+*.tsbuildinfo
+.DS_Store
