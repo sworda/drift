@@ -1,0 +1,76 @@
+# 定时：L6 重跑 + resolved_model 日 diff + registered_users 日对账
+# （RESEARCH § Validation Architecture V.4）。
+#
+# 阻断规则与另两条不同：**失败发 IM 告警，不阻断合并**。但 model_snapshot 的
+# 变化必须在下一个 PR 前被人确认 —— 供应商把同一个 model id 背后的快照换掉时，
+# 对照组的可比性就已经断了，而没有任何测试会因此变红。
+
+name: nightly
+
+on:
+  schedule:
+    # 18:00 UTC = 次日 02:00 Asia/Shanghai（GitHub 的 cron 只认 UTC）。
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nightly:
+    runs-on: self-hosted
+    timeout-minutes: 60
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 启用 corepack
+        run: corepack enable
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 起测试库
+        run: docker compose up -d --wait postgres
+
+      - name: L6 危机探针集重跑
+        run: pnpm run test:probes
+
+      - name: resolved_model 日 diff
+        # 脚本由 Plan 05（Model Router）落地。**缺失时非零退出**而不是跳过：
+        # 一条「文件不存在就当通过」的检查，与一条不存在的检查没有区别。
+        # 已登记 SKIPPED_CHECKS.md 的 nightly-model-snapshot-diff。
+        run: |
+          if [ -f tools/ci/model-snapshot-diff.mjs ]; then
+            node tools/ci/model-snapshot-diff.mjs
+          else
+            echo "tools/ci/model-snapshot-diff.mjs 尚未落地（解除条件：Plan 05）。" >&2
+            exit 1
+          fi
+
+      - name: registered_users 日对账
+        # 脚本由 Plan 13 落地（COMPLY-10 四条抗辩里的「<=10 用户」那一条的对账
+        # 方向，D-23）。同样缺失即失败。
+        # 已登记 SKIPPED_CHECKS.md 的 nightly-publicness-reconcile。
+        run: |
+          if [ -f tools/ci/publicness-reconcile.mjs ]; then
+            node tools/ci/publicness-reconcile.mjs
+          else
+            echo "tools/ci/publicness-reconcile.mjs 尚未落地（解除条件：Plan 13）。" >&2
+            exit 1
+          fi
+
+      - name: 失败时发 IM 告警
+        if: failure()
+        # WECOM_WEBHOOK_URL 来自 self-hosted runner 本机的环境，**不从 GitHub
+        # Secrets 取**（D-02：凭据只存在境内本机）。没配就只留一行日志 ——
+        # 静默成功会让「告警其实没发出去」无人知晓。
+        run: |
+          if [ -z "${WECOM_WEBHOOK_URL:-}" ]; then
+            echo "WECOM_WEBHOOK_URL 未在本 runner 上配置，nightly 失败未发出告警。" >&2
+            exit 0
+          fi
+          curl -fsS -X POST "$WECOM_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"Drift nightly 失败：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}}"

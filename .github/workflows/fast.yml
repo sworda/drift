@@ -1,0 +1,56 @@
+# L1 → L4 防线 + 全部负向 fixture（RESEARCH § Validation Architecture V.4）。
+#
+# ⚠️ 这条 workflow **必须能在 GitHub 托管 runner 上跑**，不依赖任何境内资源。
+# 理由：integration 跑在自建的境内 self-hosted runner 上（D-02），那台机器掉线
+# 时本条仍然是活的防线。因此这里不得引用任何 LLM_ / WECOM_ 前缀的 secret，
+# 也不得连接生产数据库。
+#
+# 任一步失败 → 阻断合并。
+
+name: fast
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: fast-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # corepack 首次会**交互式**询问是否下载 pnpm 12.6.0。不设这个变量的话
+      # job 会挂在提示符上直到超时 —— 一个没有任何错误信息的失败。
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # 与 package.json 的 engines.node 下限逐字一致。
+          node-version: 24.21.0
+
+      - name: 启用 corepack（pnpm 版本由 packageManager 字段锁定）
+        run: corepack enable
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: L1-L4（typecheck / lint / unit / contract）
+        run: pnpm run ci:fast
+
+      - name: 契约修订断言（Plan 01 的 13 条）
+        run: node tools/ci/check-contract-amendments.mjs
+
+      - name: lockfile 与 workspace 未被安装过程改动
+        # pnpm 12 会自行往 pnpm-workspace.yaml 写 allowBuilds / minimumReleaseAgeExclude。
+        # 那种自动改动如果被默许，「装的东西与 lockfile 一致」这条就不再成立，
+        # 所以两个文件一起断言。
+        run: git diff --exit-code pnpm-lock.yaml pnpm-workspace.yaml
