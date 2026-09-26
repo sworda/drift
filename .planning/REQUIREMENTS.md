@@ -6,6 +6,7 @@
 **编号权威**：本文件是唯一的需求编号来源。`.planning/research/` 下六份文档各自的编号（R-SAFE-xx / R1.xx / R-PII-x / N1-N16 / R-REFLECT-x）**仅为研究内部引用**，phase 文档一律只引用本文件的 REQ-ID。每条需求在末尾标注其研究出处，便于回溯论证。
 
 **里程碑切分**：
+
 - **M1（当前 roadmap）= 构建顺序 P0–P4** —— 交付「角色真的会变」这个核心赌注。结束时三个成功标准里的两个（分不清人机 / 角色真的在变化）已可测量。
 - **M2 = P5–P7** —— 主动消息与生活模拟、IFC 披露决策、研究管道与中文 PII。
 - **v2 = P8–P10** —— 竞技场、AI 社交网络、公开上线合规。
@@ -154,7 +155,7 @@
 
 ### 平台与基础设施 (PLAT)
 
-- [ ] **PLAT-01**: 单 pnpm workspace，两个部署单元：`apps/web`（仅 UI）与 `apps/api`（REST + WebSocket + pg-boss worker）
+- [x] **PLAT-01**: 单 pnpm workspace，两个部署单元：`apps/web`（仅 UI）与 `apps/api`（REST + WebSocket + pg-boss worker）
 - [ ] **PLAT-02**: 单 PostgreSQL 18.6 同时承载 OLTP + pgvector 0.8.6（`halfvec(1024)` + HNSW 余弦）+ pg-boss 12.34 队列
 - [ ] **PLAT-03**: 所有 LLM 调用必经 Model Router；模型可 pin 性维护为**显式表**，不以命名规则推断
 - [ ] **PLAT-04**: Model Router 支持「按快照名强制路由、禁止别名解析」的调用模式，供 DRIFT-02 对照臂使用
@@ -166,7 +167,6 @@
 - [ ] **PLAT-10**: 单次请求上下文预算上限 28k token〔doubao-seed-character 在 32k 处输出单价从 ¥2 跳至 ¥6，档位边界是悬崖不是斜坡〕
 - [ ] **PLAT-11**: 成本按语义角色（purpose）维度拆解可观测，而非只有总额
 - [ ] **PLAT-12**: 夜间反思读结构化要点而非全部原文〔否则成本是「角色数 × 全站流量」的乘积〕
-
 
 ---
 
@@ -413,7 +413,7 @@
 | EVAL-05 | Phase 2 | Pending |
 | EVAL-06 | Phase 2 | Pending |
 | EVAL-07 | Phase 2 | Pending |
-| PLAT-01 | Phase 1 | Pending |
+| PLAT-01 | Phase 1 | Complete |
 | PLAT-02 | Phase 1 | Pending |
 | PLAT-03 | Phase 1 | Pending |
 | PLAT-04 | Phase 2 | Pending |
@@ -430,6 +430,7 @@
 | RES-03 | Phase 1 | Pending |
 
 **Coverage:**
+
 - M1 requirements: 119 total（含 IFC-08 / RES-02 / RES-03 三条预留）
 - M2 requirements: 32 total
 - Mapped to phases: 119 ✓
@@ -459,4 +460,3 @@
 ---
 *Requirements defined: 2026-09-25*
 *Last updated: 2026-09-25 after initialization*
-
