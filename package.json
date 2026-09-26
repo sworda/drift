@@ -10,10 +10,14 @@
   "scripts": {
     "typecheck": "tsc --build tsconfig.json",
     "typecheck:tools": "tsc --noEmit -p tsconfig.json",
+    "typecheck:fixtures": "tsc --noEmit -p tools/ci/type-fixtures/tsconfig.json",
     "lint": "eslint . --max-warnings=0 --no-cache",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
-    "test:contract": "vitest run --project contract"
+    "test:contract": "vitest run --project contract",
+    "test:integration": "vitest run --project integration",
+    "test:probes": "vitest run --project probes",
+    "ci:fast": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run test:contract"
   },
   "devDependencies": {
     "@drift/contract": "workspace:*",
