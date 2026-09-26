@@ -5,7 +5,7 @@
 
 import { boolean, check, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
-import { idDefault, inValues } from '../sql-helpers.ts';
+import { inValues, newId } from '../sql-helpers.ts';
 import { user } from './auth.ts';
 import { conversation } from './conversation.ts';
 import { message } from './message.ts';
@@ -53,7 +53,7 @@ export const sessionRiskState = pgTable(
 export const safetyEvent = pgTable(
   'safety_event',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     userId: text('user_id')
       .notNull()
       .references(() => user.id),
@@ -94,7 +94,7 @@ export const safetyEvent = pgTable(
 export const contactAttempt = pgTable(
   'contact_attempt',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     safetyEventId: text('safety_event_id')
       .notNull()
       .references(() => safetyEvent.id),

@@ -19,7 +19,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
-import { idDefault } from '../sql-helpers.ts';
+import { newId } from '../sql-helpers.ts';
 
 /**
  * L1 内核（ARCHITECTURE §5.1）。**演化不可改**，由 DB 触发器兜底（0001 迁移）：
@@ -64,7 +64,7 @@ export interface PersonaDossier {
 }
 
 export const character = pgTable('character', {
-  id: text('id').primaryKey().default(idDefault),
+  id: text('id').primaryKey().$defaultFn(newId),
   name: text('name').notNull(),
   /** 头像资源标识（Phase 1 是静态资源名，不是 URL —— URL 会把渲染层绑到存储层）。 */
   avatar: text('avatar').notNull(),
@@ -83,7 +83,7 @@ export const character = pgTable('character', {
 export const personaVersion = pgTable(
   'persona_version',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     characterId: text('character_id')
       .notNull()
       .references((): AnyPgColumn => character.id),

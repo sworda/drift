@@ -6,9 +6,9 @@
 // 下发字段可以被置空或被配置改写，常量不能。
 
 import { sql } from 'drizzle-orm';
-import { check, index, integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { check, index, integer, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
-import { idDefault, inValues } from '../sql-helpers.ts';
+import { inValues, newId } from '../sql-helpers.ts';
 import { user } from './auth.ts';
 import { character } from './character.ts';
 
@@ -27,7 +27,7 @@ export type Relationship = (typeof RELATIONSHIPS)[number];
 export const conversation = pgTable(
   'conversation',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     userId: text('user_id')
       .notNull()
       .references(() => user.id),
@@ -66,6 +66,8 @@ export const conversation = pgTable(
 export const friendship = pgTable(
   'friendship',
   {
+    /** 代理主键。语义上的键是 (user_id, character_id) —— 理由同 consent.id 的注释。 */
+    id: text('id').primaryKey().$defaultFn(newId),
     userId: text('user_id')
       .notNull()
       .references(() => user.id),
@@ -76,7 +78,7 @@ export const friendship = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    primaryKey({ name: 'friendship_pkey', columns: [t.userId, t.characterId] }),
+    uniqueIndex('friendship_user_character_unique').on(t.userId, t.characterId),
     check('friendship_relationship_allowed', inValues('relationship', RELATIONSHIPS)),
   ],
 );

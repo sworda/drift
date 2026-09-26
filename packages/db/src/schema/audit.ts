@@ -13,7 +13,7 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
 
-import { idDefault, inValues } from '../sql-helpers.ts';
+import { inValues, newId } from '../sql-helpers.ts';
 import { user } from './auth.ts';
 import { CONSENT_SCOPES, type ConsentScope } from './consent.ts';
 import { conversation } from './conversation.ts';
@@ -52,7 +52,7 @@ export type DependencyRuleId = (typeof DEPENDENCY_RULE_IDS)[number];
 export const consentEvent = pgTable(
   'consent_event',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     userId: text('user_id')
       .notNull()
       .references(() => user.id),
@@ -73,7 +73,7 @@ export const consentEvent = pgTable(
 export const privacyAction = pgTable(
   'privacy_action',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     userId: text('user_id')
       .notNull()
       .references(() => user.id),
@@ -91,7 +91,7 @@ export const privacyAction = pgTable(
 export const llmCall = pgTable(
   'llm_call',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     /** 同一次用户消息引发的全部调用共享一个 turn_id。RESEARCH §4.1 的两条断言按它 JOIN。 */
     turnId: text('turn_id').notNull(),
     purpose: text('purpose').$type<LlmPurpose>().notNull(),
@@ -149,7 +149,7 @@ export const llmCall = pgTable(
 export const clientError = pgTable(
   'client_error',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     /** 可空：/telemetry/error 是弱认证端点，未登录的错误同样需要被看见（D-28）。 */
     userId: text('user_id').references(() => user.id),
     /**
@@ -170,7 +170,7 @@ export const clientError = pgTable(
 export const exitIntent = pgTable(
   'exit_intent',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     userId: text('user_id')
       .notNull()
       .references(() => user.id),
@@ -191,7 +191,7 @@ export const exitIntent = pgTable(
 export const dependencySignal = pgTable(
   'dependency_signal',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     userId: text('user_id')
       .notNull()
       .references(() => user.id),

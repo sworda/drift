@@ -1,5 +1,5 @@
 CREATE TABLE "client_error" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text,
 	"error_name" text NOT NULL,
 	"error_code" text,
@@ -10,7 +10,7 @@ CREATE TABLE "client_error" (
 );
 --> statement-breakpoint
 CREATE TABLE "consent_event" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"scope" text NOT NULL,
 	"action" text NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE "consent_event" (
 );
 --> statement-breakpoint
 CREATE TABLE "dependency_signal" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"rule_id" text NOT NULL,
 	"observed_at" timestamp with time zone NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE "dependency_signal" (
 );
 --> statement-breakpoint
 CREATE TABLE "exit_intent" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"conversation_id" text NOT NULL,
 	"tier" integer NOT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE "exit_intent" (
 );
 --> statement-breakpoint
 CREATE TABLE "llm_call" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"turn_id" text NOT NULL,
 	"purpose" text NOT NULL,
 	"provider" text NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE "llm_call" (
 );
 --> statement-breakpoint
 CREATE TABLE "privacy_action" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"kind" text NOT NULL,
 	"payload" jsonb NOT NULL,
@@ -78,7 +78,7 @@ CREATE TABLE "privacy_action" (
 );
 --> statement-breakpoint
 CREATE TABLE "account" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"account_id" text NOT NULL,
 	"provider_id" text NOT NULL,
 	"user_id" text NOT NULL,
@@ -94,7 +94,7 @@ CREATE TABLE "account" (
 );
 --> statement-breakpoint
 CREATE TABLE "emergency_contact" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"kind" text NOT NULL,
 	"name" text NOT NULL,
@@ -106,7 +106,7 @@ CREATE TABLE "emergency_contact" (
 );
 --> statement-breakpoint
 CREATE TABLE "session" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"token" text NOT NULL,
 	"user_id" text NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
@@ -117,7 +117,7 @@ CREATE TABLE "session" (
 );
 --> statement-breakpoint
 CREATE TABLE "user" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"email" text NOT NULL,
 	"email_verified" boolean DEFAULT false NOT NULL,
@@ -129,7 +129,7 @@ CREATE TABLE "user" (
 );
 --> statement-breakpoint
 CREATE TABLE "verification" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"identifier" text NOT NULL,
 	"value" text NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
@@ -138,7 +138,7 @@ CREATE TABLE "verification" (
 );
 --> statement-breakpoint
 CREATE TABLE "character" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"avatar" text NOT NULL,
 	"blurb" text NOT NULL,
@@ -147,7 +147,7 @@ CREATE TABLE "character" (
 );
 --> statement-breakpoint
 CREATE TABLE "persona_version" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"character_id" text NOT NULL,
 	"parent_id" text,
 	"core" jsonb NOT NULL,
@@ -161,17 +161,17 @@ CREATE TABLE "persona_version" (
 );
 --> statement-breakpoint
 CREATE TABLE "consent" (
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"scope" text NOT NULL,
 	"granted" boolean NOT NULL,
 	"policy_version" text NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "consent_pkey" PRIMARY KEY("user_id","scope"),
 	CONSTRAINT "consent_scope_allowed" CHECK ("scope" in ('basic_service', 'sensitive_pi', 'research_l0', 'research_l1', 'persona_evolution'))
 );
 --> statement-breakpoint
 CREATE TABLE "conversation" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"character_id" text NOT NULL,
 	"counterpart_kind" text DEFAULT 'ai_character' NOT NULL,
@@ -187,11 +187,11 @@ CREATE TABLE "conversation" (
 );
 --> statement-breakpoint
 CREATE TABLE "friendship" (
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"character_id" text NOT NULL,
 	"relationship" text DEFAULT 'stranger' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "friendship_pkey" PRIMARY KEY("user_id","character_id"),
 	CONSTRAINT "friendship_relationship_allowed" CHECK ("relationship" in ('stranger'))
 );
 --> statement-breakpoint
@@ -205,7 +205,7 @@ CREATE TABLE "invite_code" (
 );
 --> statement-breakpoint
 CREATE TABLE "message" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"conversation_id" text NOT NULL,
 	"seq" integer NOT NULL,
 	"sender_kind" text NOT NULL,
@@ -221,7 +221,7 @@ CREATE TABLE "message" (
 );
 --> statement-breakpoint
 CREATE TABLE "contact_attempt" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"safety_event_id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"contact_ref" text NOT NULL,
@@ -236,7 +236,7 @@ CREATE TABLE "contact_attempt" (
 );
 --> statement-breakpoint
 CREATE TABLE "safety_event" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"conversation_id" text NOT NULL,
 	"message_id" text,
@@ -263,7 +263,7 @@ CREATE TABLE "session_risk_state" (
 );
 --> statement-breakpoint
 CREATE TABLE "usage_segment" (
-	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"started_at" timestamp with time zone NOT NULL,
 	"last_activity_at" timestamp with time zone NOT NULL,
@@ -313,7 +313,9 @@ CREATE UNIQUE INDEX "session_token_unique" ON "session" USING btree ("token");--
 CREATE INDEX "session_user_id_idx" ON "session" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "user_email_unique" ON "user" USING btree ("email");--> statement-breakpoint
 CREATE INDEX "persona_version_character_id_idx" ON "persona_version" USING btree ("character_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "consent_user_scope_unique" ON "consent" USING btree ("user_id","scope");--> statement-breakpoint
 CREATE INDEX "conversation_user_id_idx" ON "conversation" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "friendship_user_character_unique" ON "friendship" USING btree ("user_id","character_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "message_conversation_seq_unique" ON "message" USING btree ("conversation_id","seq");--> statement-breakpoint
 CREATE INDEX "message_conversation_created_idx" ON "message" USING btree ("conversation_id","created_at");--> statement-breakpoint
 CREATE INDEX "contact_attempt_user_id_idx" ON "contact_attempt" USING btree ("user_id");--> statement-breakpoint

@@ -12,13 +12,13 @@
 
 import { index, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
-import { idDefault } from '../sql-helpers.ts';
+import { newId } from '../sql-helpers.ts';
 import { user } from './auth.ts';
 
 export const usageSegment = pgTable(
   'usage_segment',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     userId: text('user_id')
       .notNull()
       .references(() => user.id),

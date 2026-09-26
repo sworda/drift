@@ -20,7 +20,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-import { idDefault, inValues } from '../sql-helpers.ts';
+import { inValues, newId } from '../sql-helpers.ts';
 import { inviteCode } from './invite.ts';
 
 /** 紧急联系人的两种角色。未满 18 的监护人与成年用户自填的紧急联系人不是同一件事。 */
@@ -40,7 +40,7 @@ export type ContactReachability = (typeof CONTACT_REACHABILITY)[number];
 export const user = pgTable(
   'user',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     name: text('name').notNull(),
     email: text('email').notNull(),
     emailVerified: boolean('email_verified').notNull().default(false),
@@ -70,7 +70,7 @@ export const user = pgTable(
 export const account = pgTable(
   'account',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     accountId: text('account_id').notNull(),
     providerId: text('provider_id').notNull(),
     userId: text('user_id')
@@ -93,7 +93,7 @@ export const account = pgTable(
 export const session = pgTable(
   'session',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     /** 不透明随机串。路由的身份解析只认它 —— 不存在任何「请求里带 userId 就当成登录」的路径。 */
     token: text('token').notNull(),
     userId: text('user_id')
@@ -109,7 +109,7 @@ export const session = pgTable(
 );
 
 export const verification = pgTable('verification', {
-  id: text('id').primaryKey().default(idDefault),
+  id: text('id').primaryKey().$defaultFn(newId),
   identifier: text('identifier').notNull(),
   value: text('value').notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -120,7 +120,7 @@ export const verification = pgTable('verification', {
 export const emergencyContact = pgTable(
   'emergency_contact',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     userId: text('user_id')
       .notNull()
       .references(() => user.id),

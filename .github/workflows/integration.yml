@@ -58,7 +58,14 @@ jobs:
         run: docker compose up -d --wait postgres
 
       - name: L5 集成（真实 PG + mock provider）
-        run: pnpm run test:integration
+        # DATABASE_URL 在 shell 里拼而不是写在 `env:` 里：它要用的
+        # POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_HOST_PORT 是**自建 runner 进程
+        # 环境里**的值（compose 读的是同一组），而 workflow 级 `env:` 的表达式上下文
+        # 看不见 runner 的进程环境。硬写一份默认密码会让这一步在密码不对时静默连到
+        # 另一个库，所以这里故意不给 password 默认值 —— 缺了就连不上、立刻红。
+        run: >-
+          DATABASE_URL="postgres://${POSTGRES_USER:-drift}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB:-drift}"
+          pnpm run test:integration
 
       - name: L6 危机探针集
         run: pnpm run test:probes

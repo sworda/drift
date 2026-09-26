@@ -8,9 +8,9 @@
 // ⚠️ 表里**没有**「全选」的任何痕迹，这是结构性的：主键是 (user_id, scope)，
 // 一行只能表达一个 scope 的意思。没有任何一行能表达「全部同意」。
 
-import { boolean, pgTable, primaryKey, text, timestamp, check } from 'drizzle-orm/pg-core';
+import { boolean, check, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
-import { inValues } from '../sql-helpers.ts';
+import { inValues, newId } from '../sql-helpers.ts';
 import { user } from './auth.ts';
 
 /** PRIV-01 的五项。前两项必选（合同履行必要 + 个保法第二十九条单独同意）。 */
@@ -29,6 +29,17 @@ export const REQUIRED_CONSENT_SCOPES = ['basic_service', 'sensitive_pi'] as cons
 export const consent = pgTable(
   'consent',
   {
+    /**
+     * 代理主键。
+     *
+     * ⚠️ 语义上的键是 (user_id, scope)，由下面那条唯一索引保证 —— PRIMARY KEY 与
+     * UNIQUE + NOT NULL 的约束强度相同。之所以不直接用复合主键：drizzle-kit 0.31
+     * introspect 回来的复合主键与它自己生成的形态不等价，于是每次 `drizzle-kit push`
+     * 都会为它产出一对 DROP CONSTRAINT / ADD CONSTRAINT —— 一个永远非空的 diff，
+     * 而「无漂移」这条检查一旦只能靠白名单通过就等于不存在。代理主键顺带也让
+     * RES-08 的列级白名单 publication 有一个稳定的复制身份。
+     */
+    id: text('id').primaryKey().$defaultFn(newId),
     userId: text('user_id')
       .notNull()
       .references(() => user.id),
@@ -43,7 +54,7 @@ export const consent = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    primaryKey({ name: 'consent_pkey', columns: [t.userId, t.scope] }),
+    uniqueIndex('consent_user_scope_unique').on(t.userId, t.scope),
     check('consent_scope_allowed', inValues('scope', CONSENT_SCOPES)),
   ],
 );

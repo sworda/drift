@@ -12,6 +12,13 @@
   "files": [
     "src"
   ],
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push --force",
+    "db:migrate": "drizzle-kit migrate",
+    "db:check": "drizzle-kit check && node scripts/assert-no-drift.mjs",
+    "db:seed": "node src/seed/run.ts"
+  },
   "dependencies": {
     "drizzle-orm": "0.45.3",
     "postgres": "3.4.9"

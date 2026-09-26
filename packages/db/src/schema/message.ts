@@ -15,7 +15,7 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
-import { idDefault, inValues } from '../sql-helpers.ts';
+import { inValues, newId } from '../sql-helpers.ts';
 import { conversation } from './conversation.ts';
 
 export const SENDER_KINDS = ['user', 'character', 'system'] as const;
@@ -54,7 +54,7 @@ export interface MessageDisclosure {
 export const message = pgTable(
   'message',
   {
-    id: text('id').primaryKey().default(idDefault),
+    id: text('id').primaryKey().$defaultFn(newId),
     conversationId: text('conversation_id')
       .notNull()
       .references(() => conversation.id),

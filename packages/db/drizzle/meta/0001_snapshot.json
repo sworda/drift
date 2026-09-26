@@ -1,6 +1,6 @@
 {
-  "id": "4ace2b81-22ee-447f-af93-33a992070c35",
-  "prevId": "9e1f7871-df38-4527-8fbe-a06d4995ea47",
+  "id": "83ee631e-2885-4a32-8f60-200ae930cd03",
+  "prevId": "d2f2833b-482d-419a-a0f8-93d6f36e1bc6",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -12,8 +12,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -105,8 +104,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -201,8 +199,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -293,8 +290,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -392,8 +388,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "turn_id": {
           "name": "turn_id",
@@ -608,8 +603,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -688,8 +682,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "account_id": {
           "name": "account_id",
@@ -812,8 +805,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -909,8 +901,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "token": {
           "name": "token",
@@ -1018,8 +1009,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "name": {
           "name": "name",
@@ -1119,8 +1109,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "identifier": {
           "name": "identifier",
@@ -1171,8 +1160,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "name": {
           "name": "name",
@@ -1236,8 +1224,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "character_id": {
           "name": "character_id",
@@ -1356,6 +1343,12 @@
       "name": "consent",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "user_id": {
           "name": "user_id",
           "type": "text",
@@ -1388,7 +1381,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "consent_user_scope_unique": {
+          "name": "consent_user_scope_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "scope",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
       "foreignKeys": {
         "consent_user_id_user_id_fk": {
           "name": "consent_user_id_user_id_fk",
@@ -1404,15 +1419,7 @@
           "onDelete": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "consent_pkey": {
-          "name": "consent_pkey",
-          "columns": [
-            "user_id",
-            "scope"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
@@ -1431,8 +1438,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -1562,6 +1568,12 @@
       "name": "friendship",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "user_id": {
           "name": "user_id",
           "type": "text",
@@ -1589,7 +1601,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "friendship_user_character_unique": {
+          "name": "friendship_user_character_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "character_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
       "foreignKeys": {
         "friendship_user_id_user_id_fk": {
           "name": "friendship_user_id_user_id_fk",
@@ -1618,15 +1652,7 @@
           "onDelete": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "friendship_pkey": {
-          "name": "friendship_pkey",
-          "columns": [
-            "user_id",
-            "character_id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
@@ -1695,8 +1721,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "conversation_id": {
           "name": "conversation_id",
@@ -1839,8 +1864,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "safety_event_id": {
           "name": "safety_event_id",
@@ -1969,8 +1993,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -2206,8 +2229,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",

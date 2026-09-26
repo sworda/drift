@@ -184,6 +184,12 @@ importers:
       eslint:
         specifier: 10.11.0
         version: 10.11.0(jiti@2.7.0)
+      pg-boss:
+        specifier: 12.34.0
+        version: 12.34.0
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
