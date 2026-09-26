@@ -40,13 +40,13 @@ M1 结束时，三个成功标准里的两个（盲测分不清人机 / 角色�
 ## Phase Details
 
 ### Phase 1: 合规安全地基 + 会话骨架
-**Goal**: 一个新用户能完成 18+ 注册（含年龄与监护人/紧急联系人、四个互不捆绑的同意项），添加一个预设角色为好友并在类微信界面里来回聊天；会话列表、聊天界面、角色详情页与导出文件四处持续明示对面是 AI；两级危机干预路径真实可用；用户能一键导出与删除自己的全部数据并拿到显示存储处数的回执。
+**Goal**: 一个新用户能完成 18+ 注册（含年龄与监护人/紧急联系人、五个互不捆绑的同意项），添加一个预设角色为好友并在类微信界面里来回聊天；会话列表、聊天界面、角色详情页与导出文件四处持续明示对面是 AI；两级危机干预路径真实可用；用户能一键导出与删除自己的全部数据并拿到显示存储处数的回执。
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
-**Requirements**: COMPLY-01, COMPLY-02, COMPLY-03, COMPLY-04, COMPLY-05, COMPLY-06, COMPLY-07, COMPLY-08, COMPLY-09, COMPLY-10, COMPLY-11, SAFE-01, SAFE-02, SAFE-03, SAFE-04, SAFE-05, SAFE-14, PRIV-01, PRIV-02, PRIV-03, PRIV-04, PRIV-05, PRIV-06, PRIV-07, PRIV-08, PRIV-09, PRIV-10, CHAT-01, CHAT-02, CHAT-03, CHAT-04, CHAT-05, CHAT-06, CHAT-07, PLAT-01, PLAT-02, PLAT-03, PLAT-05, PLAT-06, PLAT-07, PLAT-08, IFC-08, RES-02, RES-03
+**Requirements**: COMPLY-01, COMPLY-02, COMPLY-03, COMPLY-04, COMPLY-05, COMPLY-06, COMPLY-07, COMPLY-08, COMPLY-09, COMPLY-10, COMPLY-11, SAFE-01, SAFE-02, SAFE-03, SAFE-04, SAFE-05, SAFE-14, PRIV-01, PRIV-02, PRIV-03, PRIV-04, PRIV-05, PRIV-06, PRIV-07, PRIV-08, PRIV-09, PRIV-10, CHAT-01, CHAT-02, CHAT-03, CHAT-04, CHAT-05, CHAT-06, CHAT-07, PLAT-01, PLAT-02, PLAT-03, PLAT-05, PLAT-06, PLAT-07, PLAT-08, IFC-08, RES-02, RES-03, PRIV-11, SAFE-16
 **Success Criteria** (what must be TRUE):
-  1. **【人工试玩】** 一个没见过这个产品的人能独立走完：注册（填年龄、填监护人或紧急联系人、逐项勾选四个可独立开关的同意项）→ 浏览预设角色库 → 加一个角色为好友 → 来回聊 10 轮 → 在会话列表、聊天界面、角色详情页三处都看到「AI」标识 → 导出聊天记录，打开导出文件仍然看到标识；全程无处需要人解释。
-  2. **【机器断言】** 危机探针集 100% 通过：极端情绪只触发安抚与鼓励求助且**不**联络紧急联系人；自残/自杀意图或重大财产损失表述触发援助信息 + 联络紧急联系人并写入 `safety_event`；分类器故障时 fail-closed 升到 elevated 而非 crisis。集成测试证明**不存在任何生成路径可以绕过出站安全网关**，且危机判定发生在人格渲染之后、由与扮演角色不同的模型执行。
+  1. **【人工试玩】** 一个没见过这个产品的人能独立走完：注册（填年龄、填监护人或紧急联系人、逐项勾选五个可独立开关的同意项）→ 浏览预设角色库 → 加一个角色为好友 → 来回聊 10 轮 → 在会话列表、聊天界面、角色详情页三处都看到「AI」标识 → 导出聊天记录，打开导出文件仍然看到标识；全程无处需要人解释。
+  2. **【机器断言】** 危机探针集 100% 通过：极端情绪只触发安抚与鼓励求助且**不**联络紧急联系人；自残/自杀意图或重大财产损失表述触发援助信息 + 联络紧急联系人并写入 `safety_event`；分类器故障时 fail-closed 升到 elevated 而非 crisis。集成测试证明**不存在任何生成路径可以绕过出站安全网关**，且危机判定发生在人格渲染之后、由与扮演角色不同的模型执行。acute 事件告警链路（SAFE-16）投递成功进 `pending`、投递失败直接进 `unavailable`。
   3. **【机器断言】** 三条静默失效防线在 CI 中生效：扫描 publication schema 出现任何 `vector`/`halfvec` 列即构建失败（RES-03）；ESLint 禁止向 `model` 传字符串字面量（PLAT-06，照 AI SDK 官方文档抄即构成数据出境）；隐私政策与隐私中心全文不含「匿名 / anonymous / 无法关联到你」字样（PRIV-06）。
   4. 用户在隐私中心看到的「我们收集了什么」与实际存储字段逐项一致；撤回任一同意项后对应数据流立即停止且该项从说明中消失；一键删除后收到显示已删除存储位置数量的回执，此后导出返回空集。
   5. **【机器断言】** 输入硬退出关键词后当前会话不再产生任何出站消息（含定时与推送），挽留话术触发率恒为 0；连续使用满 2 小时触发一次时长提醒，该计时跨页面刷新与重新登录仍然有效；「公开性」状态（公开注册入口 / 上架 / 注册用户数 / 商业化）任一项变化时阻断发布并输出合规 checklist。
@@ -125,12 +125,12 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | 需求数 |
 |---|---|
-| Phase 1 | 44 |
+| Phase 1 | 46 |
 | Phase 2 | 27 |
 | Phase 3 | 9 |
 | Phase 4 | 11 |
 | Phase 5 | 26 |
-| **合计** | **117 / 117 ✓** |
+| **合计** | **119 / 119 ✓** |
 
 M2（LIFE / IFC 除 IFC-08 / RES 除 RES-02,03 / PII）与 v2（ARENA / AIAI / MM / APP / PUB / MINOR）不在本 roadmap 范围内。
 
