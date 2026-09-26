@@ -33,6 +33,18 @@
   --text-heading: var(--text-heading);
   --text-display: var(--text-display);
 
+  /* ⚠️ 间距档位必须逐个桥接进 --spacing-* 命名空间，否则 px-md / gap-md-tight
+   * 这类 utility **不会报错、只是不生成任何样式** —— 一个在源码里看起来完全正常、
+   * 在页面上却毫无内边距的类名。Tailwind 4 对未知 utility 是静默跳过，不是编译失败。 */
+  --spacing-xs: var(--space-xs);
+  --spacing-sm: var(--space-sm);
+  --spacing-md-tight: var(--space-md-tight);
+  --spacing-md: var(--space-md);
+  --spacing-lg: var(--space-lg);
+  --spacing-xl: var(--space-xl);
+  --spacing-2xl: var(--space-2xl);
+  --spacing-3xl: var(--space-3xl);
+
   --spacing-ai-bar: var(--size-ai-bar);
   --spacing-touch: var(--size-touch);
   --spacing-conversation-row: var(--size-conversation-row);

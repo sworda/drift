@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -95,16 +96,16 @@ describe('法定语义色 token（UI-SPEC ## Color〔法定〕）', () => {
     expect(tokensCss).toContain('--font-sans: -apple-system');
   });
 
-  it('聊天页的 AI 常驻条是 sticky top-0 且不带任何可关闭交互', () => {
-    const chatPage = readFileSync(
-      `${REPO_ROOT}apps/web/src/app/(app)/chat/[conversationId]/page.tsx`,
-      'utf8',
-    );
+  it('AI 常驻条是 sticky top-0 且不带任何可关闭交互', () => {
+    // 常驻条在 Plan 04 从聊天页搬进了自己的组件（全仓唯一定义，文案与 32px/sticky
+    // 的硬约束收在一处）。断言跟着组件走 —— 继续扫聊天页会让这条检查在搬家之后
+    // 悄悄失去被测对象，而那正是「空真断言」的标准形态。
+    const banner = readFileSync(`${REPO_ROOT}apps/web/src/components/ai-banner.tsx`, 'utf8');
 
     // 断言范围是**常驻条那一个元素的开标签**，不是整个文件：文件里的散文（含本
     // 约束自身的说明注释）会让全文件子串扫描变成一条会误报的断言，而一条会误报
     // 的断言迟早会被人放宽成永不报。
-    const openTag = /<div\b[^>]*\bh-ai-bar\b[^>]*>/.exec(chatPage);
+    const openTag = /<div\b[^>]*\bh-ai-bar\b[^>]*>/s.exec(banner);
     expect(openTag, 'AI 常驻条必须是一个带 h-ai-bar 的元素').not.toBeNull();
     const tag = openTag?.[0] ?? '';
 
@@ -122,5 +123,57 @@ describe('法定语义色 token（UI-SPEC ## Color〔法定〕）', () => {
     ]) {
       expect(tag, `常驻条不得带 ${forbidden}`).not.toContain(forbidden);
     }
+  });
+
+  it('聊天页确实挂载了常驻条组件（否则上一条断言测的是一个没人用的组件）', () => {
+    const chatPage = readFileSync(
+      `${REPO_ROOT}apps/web/src/app/(app)/chat/[conversationId]/page.tsx`,
+      'utf8',
+    );
+    // 无条件渲染：没有三元、没有 &&。一个只在某些情况下出现的法定告知等于没告知。
+    expect(chatPage).toContain('<AiBanner />');
+  });
+
+  it('AI 标识文案在全仓各只有一处定义（不可被分叉、不由服务端下发）', () => {
+    const hits = (pattern: RegExp): string[] =>
+      execSync(
+        `grep -rn --include=*.ts --include=*.tsx -E '${pattern.source}' ${REPO_ROOT} --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next || true`,
+        { encoding: 'utf8' },
+      )
+        .split('\n')
+        .filter((line) => line.trim().length > 0);
+
+    expect(hits(/AI_BADGE_TEXT\s*=/), 'AI_BADGE_TEXT 有多于一处定义').toHaveLength(1);
+    expect(hits(/AI_BANNER_TEXT\s*=/), 'AI_BANNER_TEXT 有多于一处定义').toHaveLength(1);
+  });
+
+  it('徽标组件的 props 类型不含 text / children（用类型阻止文案覆写）', () => {
+    const badge = readFileSync(`${REPO_ROOT}apps/web/src/components/ai-badge.tsx`, 'utf8');
+    const propsBlock = /export interface AiBadgeProps \{([\s\S]*?)\n\}/.exec(badge)?.[1] ?? '';
+    expect(propsBlock, 'AiBadgeProps 未找到').not.toHaveLength(0);
+    const code = propsBlock.replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(code, 'AiBadgeProps 不得有 text 键').not.toMatch(/\btext\s*\??\s*:/);
+    expect(code, 'AiBadgeProps 不得有 children 键').not.toMatch(/\bchildren\s*\??\s*:/);
+  });
+
+  it('BubbleContent 在聊天视图里被覆写为 text-base，且不出现 text-sm', () => {
+    const chatView = readFileSync(`${REPO_ROOT}apps/web/src/features/chat/chat-view.tsx`, 'utf8');
+    const bubbleContent = /<BubbleContent[^>]*>/.exec(chatView)?.[0] ?? '';
+    expect(bubbleContent, 'chat-view 里没有 BubbleContent').not.toHaveLength(0);
+    expect(bubbleContent, 'BubbleContent 必须覆写为 text-base（16px）').toContain('text-base');
+    const code = chatView.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(code, '聊天视图不得出现 text-sm').not.toContain('text-sm');
+  });
+
+  it('全仓不存在流式下发路径（D-24 明确否决）', () => {
+    const hits = execSync(
+      `grep -rn --include=*.ts --include=*.tsx -E 'streamText|streamObject' ${REPO_ROOT}packages ${REPO_ROOT}apps || true`,
+      { encoding: 'utf8' },
+    )
+      .split('\n')
+      .filter((line) => line.trim().length > 0 && !line.includes('/node_modules/') && !line.includes('/dist/'));
+    // chunk 没有 seq 会与 CHAT-07 冲突（重连补拉拿不到半条消息），且逐 token 流出
+    // 绕过了出站安全网关 —— 成功标准 2 要求证明不存在此路径。
+    expect(hits, `出现了流式调用：\n${hits.join('\n')}`).toHaveLength(0);
   });
 });

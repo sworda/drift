@@ -12,5 +12,13 @@
   "include": [
     "src/**/*.ts",
     "drizzle.config.ts"
+  ],
+  "references": [
+    {
+      "path": "../contract"
+    },
+    {
+      "path": "../prompts"
+    }
   ]
 }

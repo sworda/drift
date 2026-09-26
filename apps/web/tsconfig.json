@@ -18,6 +18,11 @@
     "noUnusedParameters": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
+    // ⚠️ 必需，且原因不在本目录：@drift/contract 的 exports 指向 src/index.ts，于是
+    // 它的源文件会被拉进 apps/web 的 program，而那些文件用 .ts specifier 互相引用
+    // （跨包运行时 import 必须写 .ts —— Node 24 不会把 ./x.js 改写成 ./x.ts）。
+    // 没有这个开关，apps/web 的 typecheck 会为 contract 内部的 import 报 TS5097。
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

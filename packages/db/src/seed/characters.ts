@@ -6,7 +6,7 @@
 //
 // Phase 1 只填 core + 一版 traits/dossier，**不建演化管道**（Phase 4-5）。
 
-import { createHash } from 'node:crypto';
+import { promptVersion } from '@drift/prompts';
 
 import type { PersonaCore, PersonaDossier, PersonaTraits } from '../schema/character.ts';
 
@@ -126,9 +126,16 @@ export function reviewCharacterConcept(text: string): ConceptReview {
   return { ok: true };
 }
 
-/** 内容哈希（PLAT-08：真相源在 git）。Task 3 起改为复用 @drift/prompts 的同一实现。 */
+/**
+ * 种子人格的 prompt_version。
+ *
+ * 复用 @drift/prompts 的 promptVersion，**不在这里再写一遍 sha256**：两份「内容哈希」
+ * 实现必须永远给出同一个值，而没有任何断言会发现它们哪天不再一样 —— 那时
+ * llm_call.prompt_version 与 persona_version.prompt_version 指向同一段文本却对不上，
+ * 归因链在无声中断掉。
+ */
 export function seedPromptVersion(dossier: string): string {
-  return `sha256:${createHash('sha256').update(dossier, 'utf8').digest('hex').slice(0, 16)}`;
+  return promptVersion(dossier);
 }
 
 // ── 3 个预设角色 ─────────────────────────────────────────────────────────────

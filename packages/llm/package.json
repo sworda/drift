@@ -11,5 +11,9 @@
   },
   "files": [
     "src"
-  ]
+  ],
+  "dependencies": {
+    "@drift/db": "workspace:*",
+    "@drift/prompts": "workspace:*"
+  }
 }

@@ -20,6 +20,8 @@
     "db:seed": "node src/seed/run.ts"
   },
   "dependencies": {
+    "@drift/contract": "workspace:*",
+    "@drift/prompts": "workspace:*",
     "drizzle-orm": "0.45.3",
     "postgres": "3.4.9"
   },

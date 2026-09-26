@@ -5,6 +5,10 @@ import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 
 import { env } from '../config/env.ts';
+import { authRoutes } from '../modules/auth/routes.ts';
+import { characterRoutes } from '../modules/characters/routes.ts';
+import { chatRoutes } from '../modules/chat/routes.ts';
+import { friendshipRoutes } from '../modules/friendship/routes.ts';
 import { logEvent } from '../obs/logger.ts';
 import { HEALTH_PATH, healthRoutes } from './health.ts';
 
@@ -36,6 +40,10 @@ export function createApp(): Hono {
   app.use('*', cors({ origin: env.WEB_ORIGIN, credentials: true }));
 
   app.route('/', healthRoutes);
+  app.route('/', authRoutes);
+  app.route('/', characterRoutes);
+  app.route('/', friendshipRoutes);
+  app.route('/', chatRoutes);
 
   app.post(
     '/telemetry/error',

@@ -12,6 +12,7 @@
 // COMPLY-09 的兜底：任何插入角色消息而未注入标识的路径 —— **包括将来新增的、绕过
 // insertCharacterMessage 的路径** —— 在数据库层失败。这比任何 lint 或测试都强。
 
+import type { Disclosure } from '@drift/contract';
 import { sql } from 'drizzle-orm';
 import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
@@ -37,19 +38,15 @@ export interface MessageProvenance {
 }
 
 /**
- * 内容级 AI 明示标识（COMPLY-09）。
+ * 内容级 AI 明示标识（COMPLY-09）的列类型。
  *
- * ⚠️ 这里**只存事实**（这条消息是 AI 生成的、何时被标注、标注管道的版本），
- * **不存文案**。文案是 packages/contract 的 as const 常量：存进每一行会让
- * 「改一次配置就静默改掉一处法定标识」重新变成可能。
+ * 类型本体在 @drift/contract —— 跨端唯一真相源。**只存事实、不存文案**：
+ * 文案是那个包里的 as const 常量，存进每一行会让「改一次配置就静默改掉一处法定
+ * 标识」重新变成可能，而且会让同一段法定文字在库里有成千上万份副本。
  *
  * Phase 1 的消费点只有导出管道（气泡流不做逐条脚注，UI-SPEC 明文）。
  */
-export interface MessageDisclosure {
-  readonly kind: 'ai_generated';
-  readonly labeledAt: string;
-  readonly labelerVersion: string;
-}
+export type MessageDisclosure = Disclosure;
 
 export const message = pgTable(
   'message',
@@ -62,7 +59,7 @@ export const message = pgTable(
     seq: integer('seq').notNull(),
     senderKind: text('sender_kind').$type<SenderKind>().notNull(),
     text: text('text').notNull(),
-    disclosure: jsonb('disclosure').$type<MessageDisclosure>(),
+    disclosure: jsonb('disclosure').$type<Disclosure>(),
     provenance: jsonb('provenance').$type<MessageProvenance>().notNull(),
     audience: text('audience').$type<MessageAudience>().notNull().default('user'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

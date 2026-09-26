@@ -169,6 +169,15 @@ importers:
       '@drift/contract':
         specifier: workspace:*
         version: link:packages/contract
+      '@drift/db':
+        specifier: workspace:*
+        version: link:packages/db
+      '@drift/safety':
+        specifier: workspace:*
+        version: link:packages/safety
+      '@hono/node-server':
+        specifier: 2.1.1
+        version: 2.1.1(hono@4.13.9)
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
@@ -181,6 +190,9 @@ importers:
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
+      drizzle-orm:
+        specifier: 0.45.3
+        version: 0.45.3(pg@8.23.0)(postgres@3.4.9)
       eslint:
         specifier: 10.11.0
         version: 10.11.0(jiti@2.7.0)
@@ -295,10 +307,20 @@ importers:
         specifier: 4.3.3
         version: 4.3.3
 
-  packages/contract: {}
+  packages/contract:
+    dependencies:
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
 
   packages/db:
     dependencies:
+      '@drift/contract':
+        specifier: workspace:*
+        version: link:../contract
+      '@drift/prompts':
+        specifier: workspace:*
+        version: link:../prompts
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(pg@8.23.0)(postgres@3.4.9)
@@ -310,11 +332,22 @@ importers:
         specifier: 0.31.11
         version: 0.31.11
 
-  packages/llm: {}
+  packages/llm:
+    dependencies:
+      '@drift/db':
+        specifier: workspace:*
+        version: link:../db
+      '@drift/prompts':
+        specifier: workspace:*
+        version: link:../prompts
 
   packages/prompts: {}
 
-  packages/safety: {}
+  packages/safety:
+    dependencies:
+      '@drift/contract':
+        specifier: workspace:*
+        version: link:../contract
 
 packages:
 
