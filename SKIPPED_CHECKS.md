@@ -9,4 +9,4 @@ SUMMARY 里说明。
 
 | check id | 为什么 skip | 解除条件 | 登记日期 |
 |---|---|---|---|
-| *(暂无)* | | | |
+| L2-type-aware-on-ts6 | type-aware lint 的类型判定跑在 TS 6.0 API 上而非生产编译器 TS 7.0.2。typescript@7 是原生端口、不再提供 JS 编译器 API，@typescript-eslint 8.70.1 的 peer 范围是 `>=4.8.4 <6.1.0` 且实跑直接抛错。按 TS 7.0 公告的 Running Side-by-Side 方案，`typescript` 别名指向 `@typescript/typescript6`，`tsc` 由 `@typescript/native` 提供。四条 no-unsafe-* 规则全部保留为 error，未 skip，但两个编译器的类型判定可能有细微差异 | typescript-eslint 支持 TS >=7.1（[typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)）后，删除 package.json 里的两个 npm alias，回到单一 `typescript` 依赖 | 2026-09-26 |
