@@ -1,0 +1,118 @@
+/* apps/web 的全局样式入口。
+ *
+ * ⚠️ import 顺序是有意的，不要调：tokens.css 必须是**最后一条** @import，而且
+ * 下面 :root 块里凡被 tokens.css 拥有的键都已删除。原因是 CSS 层叠里 @import
+ * 进来的规则永远早于本文件的内联规则 —— 只靠「把 tokens.css 放最后」并不能让
+ * 它赢，同名键必须只在一个地方定义。tools/ci/design-tokens.test.ts 断言法定
+ * 语义色的值与 01-UI-SPEC.md ## Color 表逐个相等。 */
+
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '../styles/tokens.css';
+
+/* 把 tokens.css 的法定语义色与尺寸桥接进 Tailwind 的 theme 命名空间，
+ * 组件才能用 bg-ai-label-surface / h-ai-bar 这类 utility 消费它们。
+ * 方向是「utility 引用法定 token」，不是「法定 token 引用别的 token」——
+ * 后者才是 UI-SPEC 禁止的那种引用。 */
+@theme inline {
+  --color-ai-label-surface: var(--ai-label-surface);
+  --color-ai-label-border: var(--ai-label-border);
+  --color-ai-label-text: var(--ai-label-text);
+  --color-care-surface: var(--care-surface);
+  --color-care-border: var(--care-border);
+  --color-care-text: var(--care-text);
+  --color-character-bubble: var(--character-bubble);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-placeholder: var(--text-placeholder);
+  --color-neutral-nontext: var(--neutral-nontext);
+
+  --text-label: var(--text-label);
+  --text-body: var(--text-body);
+  --text-heading: var(--text-heading);
+  --text-display: var(--text-display);
+
+  --spacing-ai-bar: var(--size-ai-bar);
+  --spacing-touch: var(--size-touch);
+  --spacing-conversation-row: var(--size-conversation-row);
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: var(--font-sans);
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  /* 空插槽 —— 深色模式 v1 不实现（UI-SPEC ## Design System）。
+   * tokens.css 里有同名的空 .dark 块；两处都为空是有意的。 */
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}

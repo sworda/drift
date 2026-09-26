@@ -1,0 +1,126 @@
+/* ============================================================================
+ * Drift 设计 token —— 真相源是 01-UI-SPEC.md 的 ## Color / ## Typography /
+ * ## Spacing Scale 三张表。本文件由 tools/ci/design-tokens.test.ts 机械比对。
+ *
+ * 本文件为什么存在（而不是直接改 globals.css 里 shadcn 生成的那块）：
+ * UI-SPEC 里有两组颜色标了〔法定〕—— AI 明示标识与危机关怀卡片。它们不是配色
+ * 选择，是《人工智能拟人化互动服务管理暂行办法》与 SAFE-01..05 的可感知性要求。
+ * 把它们放进一个单独的、带断言的文件，是为了让「调一次通用描边顺手改掉一个法定
+ * 标识」这件事做不到。
+ *
+ * ⚠️ 六个 --ai-label-* / --care-* 的值必须是**字面十六进制**，不得写成 var(...)。
+ *    引用 Border / Neutral 的那一刻，通用描边的每一次调整都会静默改变一个法定
+ *    标识的对比度，而不会有任何检查变红。design-tokens.test.ts 断言这一点。
+ * ========================================================================== */
+
+:root {
+  /* ── 法定语义色 1/2：AI 明示标识〔法定 · COMPLY-01/02/09〕────────────────
+   * 面色对页面底(#F6F7F9)本身对比度很低，所以描边不可省略：没有描边时徽标轮廓
+   * 只有 1.15:1，形状几乎不可见，「可被用户明显感知」全靠 13px 文字扛。
+   * 描边 #64748B 对页面底 4.4:1，远超 WCAG 1.4.11 对非文字元素的 3:1。
+   * 文字 #334155 在面色上 7.8:1。
+   * 故意是中性色：不能用 accent（会和 CTA 混淆且传达「可点击」）、不能用
+   * destructive（传达「危险」）、不能用 care（传达「你现在有风险」）。 */
+  --ai-label-surface: #D8E0EA;
+  --ai-label-border: #64748B;
+  --ai-label-text: #334155;
+
+  /* ── 法定语义色 2/2：危机关怀〔法定 · SAFE-01..05〕──────────────────────
+   * 暖琥珀而非红色。红色在自残/自杀语境下带来被斥责感，可能抑制用户继续表达，
+   * 从而**降低危机可检出率**（PITFALLS-SAFETY）。文字 #92400E 在面色上 6.8:1。
+   * 两级危机卡片同色不同版式 —— 差异由布局与可关闭性承担，不由色相承担，
+   * 所以这里只有一套 care 调色板。 */
+  --care-surface: #FFFBEB;
+  --care-border: #FDE68A;
+  --care-text: #92400E;
+
+  /* ── 通用调色板（UI-SPEC ## Color）───────────────────────────────────── */
+  --dominant: #F6F7F9;
+  --secondary-surface: #FFFFFF;
+  --character-bubble: #ECEEF3;
+  --destructive: #DC2626;
+  --text-primary: #0F172A;
+  --text-secondary: #556070;
+  --text-placeholder: #5F6B7C;
+  /* 仅骨架屏填充与禁用态图标。**禁止承载任何文字** —— 该值在本契约的任何背景上
+   * 都低于 4.5:1（#FFFFFF 上 2.6，#F6F7F9 上 2.4）。 */
+  --neutral-nontext: #94A3B8;
+  --border: #E2E8F0;
+
+  /* Accent。闭合清单共 4 项：每屏至多一个主 CTA 的填充、用户自己的消息气泡、
+   * 会话列表未读数徽章、已勾选同意项 / 已开启 Switch 的轨道。表外不得使用。 */
+  --primary: #5B5BD6;
+  --primary-foreground: #FFFFFF;
+
+  /* ── shadcn 语义桥接 ──────────────────────────────────────────────────
+   * ⚠️ 命名陷阱：shadcn 的 --accent 是「hover 时的浅底」，不是 UI-SPEC 的
+   * Accent(10%) 品牌色。后者对应的是 --primary。把品牌紫接到 --accent 上会让
+   * 每一行列表 hover 都变成紫色 —— 直接违反 accent 的 4 项闭合清单。 */
+  --background: var(--dominant);
+  --foreground: var(--text-primary);
+  --card: var(--secondary-surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--secondary-surface);
+  --popover-foreground: var(--text-primary);
+  --secondary: var(--character-bubble);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--character-bubble);
+  --muted-foreground: var(--text-secondary);
+  --accent: var(--character-bubble);
+  --accent-foreground: var(--text-primary);
+  --destructive-foreground: #FFFFFF;
+  --input: var(--border);
+  --ring: var(--primary);
+
+  /* ── 字体（UI-SPEC ## Design System）──────────────────────────────────
+   * 系统字体栈：零网络字体开销，中文字形贴近用户本机 IM 观感 —— 这正是
+   * 「类微信」的第一性目标。**不使用 next/font** （它会把字体自托管进构建产物）。 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei',
+    'Segoe UI', system-ui, sans-serif;
+
+  /* ── 字号：恰好 4 档（UI-SPEC ## Typography）───────────────────────────
+   * 消息正文不下探到 14px：主流 IM 的正文都在 16–17px，字号偏小会让界面
+   * 一眼「像后台系统」。Heading 用 1.3 而非 1.2 —— 中文字形在 20px 标题上
+   * 1.2 会视觉贴顶。 */
+  --text-label: 13px;
+  --text-label--line-height: 1.4;
+  --text-body: 16px;
+  --text-body--line-height: 1.5;
+  --text-heading: 20px;
+  --text-heading--line-height: 1.3;
+  --text-display: 28px;
+  --text-display--line-height: 1.2;
+
+  /* ── 字重：恰好 2 个。不引入 500 或 700。 ─────────────────────────────── */
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+
+  /* ── 间距（UI-SPEC ## Spacing Scale）──────────────────────────────────
+   * 标准集 4/8/16/24/32/48/64。md-tight(12px) 是 A 组里唯一的标准集外档位：
+   * 16px 在 375px 宽视口下让气泡与会话行明显过于疏松，8px 又让 16px 正文贴边。
+   * 作用域限于气泡与列表行的水平内边距，不得外溢为通用间距。 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md-tight: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* ── B 组固定尺寸约定（不是 scale 档位）──────────────────────────────── */
+  /* iOS HIG 最小触控尺寸。所有 icon-only 控件（返回/发送/表情/更多）。 */
+  --size-touch: 44px;
+  /* 会话列表单行固定高度（头像 48 + 上下 12）。固定行高是虚拟滚动与
+   * 「未读数位置不跳动」的前提。 */
+  --size-conversation-row: 72px;
+  /* 聊天页顶部 AI 常驻提示条的高度〔法定〕。不得因「太占地方」压到 32px 以下；
+   * 13px 文字在 32px 条内垂直居中。 */
+  --size-ai-bar: 32px;
+}
+
+/* 深色模式 v1 不做（UI-SPEC ## Design System）：AI 标识「可被用户明显感知」是
+ * 法定要求，双主题会让对比度验收工作量翻倍。这里只留插槽，不实现。 */
+.dark {
+  /* 故意为空。要实现深色模式，必须先把 ## Color 的对比度声明表再算一遍。 */
+}

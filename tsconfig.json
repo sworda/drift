@@ -40,6 +40,9 @@
     },
     {
       "path": "./apps/api"
+    },
+    {
+      "path": "./apps/web/tsconfig.typecheck.json"
     }
   ]
 }
