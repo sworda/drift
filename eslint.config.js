@@ -51,18 +51,35 @@ export const REQUIRED_RESTRICTED_SYNTAX = [
 ];
 
 /** packages/llm 之外禁止静态导入 provider SDK。 */
-const RESTRICTED_PROVIDER_IMPORTS = [
-  'error',
-  {
-    patterns: [
-      {
-        group: ['@ai-sdk/*', '@ai-sdk', 'openai', 'openai/*', '@anthropic-ai/*'],
-        message:
-          'provider SDK 只能在 packages/llm 里导入 —— 它是 Model Router 的唯一入口（PLAT-03/06）。',
-      },
-    ],
-  },
-];
+const PROVIDER_IMPORT_PATTERN = {
+  group: ['@ai-sdk/*', '@ai-sdk', 'openai', 'openai/*', '@anthropic-ai/*'],
+  message:
+    'provider SDK 只能在 packages/llm 里导入 —— 它是 Model Router 的唯一入口（PLAT-03/06）。',
+};
+
+/**
+ * apps/api/src/ws/** 之外禁止导入 ws（RESEARCH §2.1 四条不可协商包边界之一）。
+ * 「WS 下发只接受 GatedText」这条约束的执行点只有那一个模块；别处能 new WebSocketServer
+ * 就等于多了一个不受约束的出口，而 lint 会一直是绿的。
+ */
+const WS_IMPORT_PATTERN = {
+  // 用 regex 而不是 group：gitignore 风格的 group 会把相对路径 './ws/server.ts'
+  // 也算作命中（实测），从而把「唯一导入者」这条边界变成「谁都不能引用 ws 目录」。
+  regex: String.raw`^ws(/|$)`,
+  message:
+    'ws 的唯一导入者是 apps/api/src/ws/** —— 新开一个 WebSocketServer 会绕过「下发只接受 GatedText」这条约束（D-15）。',
+};
+
+/**
+ * 两条导入边界的作用域不同（packages/llm 豁免 provider，apps/api/src/ws 豁免 ws），
+ * 而 flat config 对同一规则是**替换而非合并** —— 因此必须从这里组装，不能靠叠加。
+ */
+function restrictedImports({ providers = true, ws = true } = {}) {
+  const patterns = [];
+  if (providers) patterns.push(PROVIDER_IMPORT_PATTERN);
+  if (ws) patterns.push(WS_IMPORT_PATTERN);
+  return patterns.length === 0 ? 'off' : ['error', { patterns }];
+}
 
 /** 三层出口防线里唯一能堵住 any 通道的一层。不得降级为 warn 或 off。 */
 const TYPE_AWARE_ANY_DEFENSE = {
@@ -92,7 +109,7 @@ export default [
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module' },
     rules: {
       'no-restricted-syntax': ['error', ...REQUIRED_RESTRICTED_SYNTAX],
-      'no-restricted-imports': RESTRICTED_PROVIDER_IMPORTS,
+      'no-restricted-imports': restrictedImports(),
     },
   },
   {
@@ -105,7 +122,7 @@ export default [
     plugins: { '@typescript-eslint': tsPlugin },
     rules: {
       'no-restricted-syntax': ['error', ...REQUIRED_RESTRICTED_SYNTAX],
-      'no-restricted-imports': RESTRICTED_PROVIDER_IMPORTS,
+      'no-restricted-imports': restrictedImports(),
       ...TYPE_AWARE_ANY_DEFENSE,
     },
   },
@@ -114,8 +131,35 @@ export default [
     // no-restricted-syntax 必须 spread 仓库级条目 —— 不 spread 就会静默丢掉全部禁令。
     files: ['packages/llm/**/*.ts'],
     rules: {
-      'no-restricted-imports': 'off',
+      'no-restricted-imports': restrictedImports({ providers: false }),
       'no-restricted-syntax': ['error', ...REQUIRED_RESTRICTED_SYNTAX],
+    },
+  },
+  {
+    // apps/api：唯一允许读 process.env 的文件是 src/config/env.ts，它在使用点上带一条
+    // eslint-disable。其余模块必须用 env.ts 导出的只读 env 对象 —— 环境变量在启动时
+    // 一次性校验并 exit 1，任何绕过它的直接读取都会让一个缺失变量延迟到「危机二级要
+    // 通知运营者」那一刻才失败。
+    // ⚠️ 必须 spread REQUIRED_RESTRICTED_SYNTAX：不 spread 就会静默删掉 model 字面量
+    // 与 GatedText 断言两组禁令，而 lint 依然全绿。
+    files: ['apps/api/src/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...REQUIRED_RESTRICTED_SYNTAX,
+        {
+          selector: "MemberExpression[object.name='process'][property.name='env']",
+          message:
+            'apps/api 里只有 src/config/env.ts 能读环境变量；其余模块 import { env } from 那个启动时已校验的只读对象。',
+        },
+      ],
+    },
+  },
+  {
+    // ws 的唯一导入者。只豁免 ws 这一条，provider SDK 的边界照旧。
+    files: ['apps/api/src/ws/**/*.ts'],
+    rules: {
+      'no-restricted-imports': restrictedImports({ ws: false }),
     },
   },
   {
@@ -129,7 +173,7 @@ export default [
     plugins: { '@typescript-eslint': tsPlugin },
     rules: {
       'no-restricted-syntax': ['error', ...REQUIRED_RESTRICTED_SYNTAX],
-      'no-restricted-imports': RESTRICTED_PROVIDER_IMPORTS,
+      'no-restricted-imports': restrictedImports(),
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',

@@ -1,0 +1,77 @@
+// pg-boss worker —— 三个入口里的第三个。
+//
+// PLAT-02：任务队列与 OLTP 同库。决定性理由是**同事务性**（STACK §6）：夜间反思要在
+// 一个事务里读全量增量 → 调 LLM → 写 persona_snapshots → 更新 characters.state →
+// 推进水位。人格是全局共享的，半更新会污染所有用户。
+//
+// ⚠️ pg-boss 自己建表、自己跑自己的迁移。因此它必须住在**独立 schema**（下面的
+// PGBOSS_SCHEMA），而 packages/db/drizzle.config.ts 的 schemaFilter 必须把它排除 ——
+// 否则 drizzle 会把 pg-boss 的表当成漂移要删（RESEARCH §2.2 三个已核实兼容性坑之二）。
+//
+// ── 以下四条是从 node_modules/pg-boss/dist/{index,types}.d.ts 实读确认的（Q5：不照抄
+//    任何文档形态）。四条里有三条与流传最广的文档写法不同：
+//
+//  1. 导出形态：`export declare class PgBoss`，**没有 default export**（整个 index.d.ts
+//     里 `export default` 零命中）。因此只能 `import { PgBoss } from 'pg-boss'`；
+//     文档里常见的 `import PgBoss from 'pg-boss'` 在 v12 下取到的是 undefined。
+//  2. schema 选项：`ConstructorOptions extends DatabaseOptions`，而
+//     `DatabaseOptions.schema?: string` —— 与 connectionString 同级，不是嵌套对象。
+//  3. 延迟投递有两种形态，签名不可互换：
+//       send(name: string, data?: object | null, options?: SendOptions)
+//         其中 SendOptions = JobOptions & QueueOptions & ConnectionOptions，
+//         而 JobOptions.startAfter?: number | string | Date
+//       sendAfter(name: string, data: object | null, options: SendOptions | null, date: Date)
+//       sendAfter(name: string, data: object | null, options: SendOptions | null, dateString: string)
+//       sendAfter(name: string, data: object | null, options: SendOptions | null, seconds: number)
+//     注意 sendAfter 的第 2、3 个参数**不是可选的**（可以传 null 但必须传）——
+//     三参数写法 sendAfter(name, data, seconds) 不通过类型检查。
+//     「拟真回复延迟」用这两者之一；本 plan 不注册任何队列，Plan 07 的状态机接入。
+//  4. stop 选项：`StopOptions { close?: boolean; graceful?: boolean; timeout?: number }`
+//     —— **没有 `wait` 字段**。cron 用 `schedule(name, cron, data?, options?)`，
+//     ScheduleOptions = SendOptions & { tz?, key?, missed?: 'skip' | 'once' }。
+
+import { PgBoss } from 'pg-boss';
+
+import { env } from '../config/env.ts';
+import { logError, logEvent } from '../obs/logger.ts';
+
+/** pg-boss 的专属 schema。drizzle 的 schemaFilter 必须排除它。 */
+export const PGBOSS_SCHEMA = 'pgboss';
+
+export interface WorkerHandle {
+  readonly boss: PgBoss;
+  readonly stop: () => Promise<void>;
+}
+
+export async function startWorker(): Promise<WorkerHandle> {
+  const boss = new PgBoss({
+    connectionString: env.DATABASE_URL,
+    schema: PGBOSS_SCHEMA,
+    application_name: 'drift-api-worker',
+    max: 4,
+  });
+
+  // pg-boss 的 error 事件是 unhandled 时会打挂进程的那一类。必须挂。
+  boss.on('error', (error: Error) => {
+    logError('pgboss.error', error);
+  });
+  boss.on('warning', () => {
+    // Warning 的载荷里可能带 SQL 片段，不进日志字段，只计数。
+    logEvent('pgboss.warning', {}, 'warn');
+  });
+
+  // start() 会在 PGBOSS_SCHEMA 里建表并跑 pg-boss 自己的迁移。
+  // /healthz 的 pgboss 字段就是查这个 schema 里有没有表 —— 所以启动顺序是
+  // worker 先起，HTTP 后起，否则第一次 healthcheck 必然是 503。
+  await boss.start();
+  logEvent('worker.started', { phase: PGBOSS_SCHEMA });
+
+  return {
+    boss,
+    stop: async (): Promise<void> => {
+      // graceful: 让在执行中的任务跑完；timeout 是上限。close 默认关连接池。
+      await boss.stop({ graceful: true, timeout: 10_000 });
+      logEvent('worker.stopped');
+    },
+  };
+}

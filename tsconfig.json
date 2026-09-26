@@ -37,6 +37,9 @@
     },
     {
       "path": "./packages/prompts"
+    },
+    {
+      "path": "./apps/api"
     }
   ]
 }
