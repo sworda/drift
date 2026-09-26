@@ -49,7 +49,9 @@
     "security_asvs_level": 1,
     "security_block_on": "high",
     "tdd_mode": false,
-    "ui_review": true
+    "ui_review": true,
+    "_auto_chain_active": false,
+    "test_command": "pnpm run ci:fast"
   },
   "ship": {
     "pr_body_sections": [
