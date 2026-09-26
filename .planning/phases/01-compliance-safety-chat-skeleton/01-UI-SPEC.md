@@ -5,7 +5,7 @@ status: approved
 reviewed_at: "2026-09-26"
 reviewed_by: "gsd-ui-checker（revision pass 1 · 7 维度无 BLOCK）"
 shadcn_initialized: false
-preset: "radix + @shadcn/theme-slate + 自定义 --primary —— 在 STACK.md §13 建好的 apps/web 内 init，不使用 --template（见 ## Design System）"
+preset: "radix base（实际落地 style: radix-nova）+ 调色板按 ## Color 表逐值落地 + 自定义 --primary —— 在 STACK.md §13 建好的 apps/web 内 init，不使用 --template（见 ## Design System；A-04 修订）"
 preset_field_note: "本字段是**设计预设的描述**，不是 shadcn CLI `-p, --preset` 的取值。CLI 的 --preset 有自己的取值域（例如 --defaults 等价于 --template=next --preset=base-nova）；不得把本字段的内容原样传给 --preset。实际命令见 ## Design System 的两步预设。"
 created: "2026-09-25"
 ---
@@ -44,7 +44,7 @@ created: "2026-09-25"
 | Property | Value |
 |----------|-------|
 | Tool | shadcn（CLI **4.21.0**，已验证可达）—— **尚未 init**：仓库当前只有 `.planning/`，`apps/web` 未 scaffold，故 `components.json` 不存在 |
-| Preset | **两步，顺序绑定**：① 先按 STACK.md §13 建 `apps/web`（锁定 next@16.3.6 / react@19.3.0 / tailwind@4.3.3）；② 再在其中 init shadcn，**不带 `--template`**：<br>`pnpm --filter web add next@16.3.6 react@19.3.0 react-dom@19.3.0 @ai-sdk/react@4.0.117 zod@4.6.5`<br>`pnpm --filter web add -D tailwindcss@4.3.3 @tailwindcss/postcss`<br>`pnpm dlx shadcn@4.21.0 init --base radix --css-variables --no-rtl --no-monorepo --cwd apps/web`<br>`pnpm dlx shadcn@4.21.0 add @shadcn/theme-slate --cwd apps/web` 并覆写 `--primary`（见 ## Color）<br>⚠️ **不得使用 `--template next`**：它会自行 scaffold 一个 Next 工程，从而绕过 STACK.md 的锁定版本与 PLAT-01 的「单 pnpm workspace + apps/web」结构。`--no-monorepo` 同理 —— monorepo 由本仓库的 pnpm workspace 承担，不交给 shadcn 生成。<br>参数取自 `pnpm dlx shadcn@4.21.0 init --help` 实际输出（`-b/--base`、`--css-variables`、`--no-rtl`、`--no-monorepo`、`-c/--cwd` 均存在）—— 2026-09-25 |
+| Preset | **两步，顺序绑定**：① 先按 STACK.md §13 建 `apps/web`（锁定 next@16.3.6 / react@19.3.0 / tailwind@4.3.3）；② 再在其中 init shadcn，**不带 `--template`**：<br>`pnpm --filter web add next@16.3.6 react@19.3.0 react-dom@19.3.0 @ai-sdk/react@4.0.117 zod@4.6.5`<br>`pnpm --filter web add -D tailwindcss@4.3.3 @tailwindcss/postcss`<br>`pnpm dlx shadcn@4.21.0 init --base radix --css-variables --no-rtl --no-monorepo --cwd apps/web`<br>**不跑 `add @shadcn/theme-slate`**（A-04）：该 registry 条目仍然存在，但它的 `cssVars` 是 oklch 值，与本契约 `## Color` 表的 hex 值不相等，落地后 `tools/ci/design-tokens.test.ts` 的逐值断言必然失败。调色板改为直接按 `## Color` 表在 `src/styles/tokens.css` 逐值落地（含 `--primary: #5B5BD6`），该路径有 CI 断言守护，是更强的约束。<br>⚠️ **不得使用 `--template next`**：它会自行 scaffold 一个 Next 工程，从而绕过 STACK.md 的锁定版本与 PLAT-01 的「单 pnpm workspace + apps/web」结构。`--no-monorepo` 同理 —— monorepo 由本仓库的 pnpm workspace 承担，不交给 shadcn 生成。<br>参数取自 `pnpm dlx shadcn@4.21.0 init --help` 实际输出（`-b/--base`、`--css-variables`、`--no-rtl`、`--no-monorepo`、`-c/--cwd` 均存在）—— 2026-09-25 |
 | Component library | **radix**（`radix-ui`）—— 不是推测：`shadcn view @shadcn/bubble` 的 `dependencies` 字段实际列出 `radix-ui` |
 | Icon library | **lucide-react**（shadcn 默认；Phase 1 只用到 ~12 个图标，不引入第二套） |
 | Font | **系统字体栈**：`-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif`。零网络字体开销，中文字形贴近用户本机 IM 观感 —— 这正是「类微信」的第一性目标 |
@@ -177,7 +177,7 @@ B 组是固定尺寸约定，不是 scale 档位，因此**不参与**该计数 
 | Neutral non-text | `#94A3B8` | **仅**骨架屏填充与禁用态图标。**禁止承载任何文字** —— 该值在任何本契约的背景上都低于 4.5:1 |
 | Border | `#E2E8F0` | 分割线、输入框描边（**不含** AI-label 描边） |
 
-基座取 `@shadcn/theme-slate`（冷灰中性族），再覆写 `--primary: #5B5BD6`。
+基座色族为冷灰中性族（slate 族，本表各值即是），由 `src/styles/tokens.css` 逐值落地，再覆写 `--primary: #5B5BD6`。**不经由 `add @shadcn/theme-slate`** —— 理由见 `## Design System` 的 Preset 行（A-04）。
 
 **Accent reserved for（闭合清单，共 4 项 —— 表外任何元素都不得使用 accent）：**
 
@@ -536,6 +536,8 @@ Applicable state considerations: **68** — **56 covered（explicit）/ 6 backst
 | A-03 | 同意项数量表述**六处**由四改五：`## 本阶段覆盖的用户可见面` 第 1 行（含备注列）、`## Component Inventory` 的 `checkbox` 行 Notes、`## 视觉锚点契约` 的「注册 / onboarding」行次级读点单元格（仅该单元格的数字）、`## 交互契约` 同意项行（首列与正文，并改写必选集为两项）、`## UI Considerations` 的 `empty` / E1 注册表单 行、`## UI Considerations` 的 `zero-one-many` / E9 行 | PRIV-01（REQUIREMENTS.md 五项同意）、D-20、个保法第二十九条 / 第十四条 |
 | Q1 | `## Copywriting Contract` 的「删除回执」行追加审计去标识化句；`## UI Considerations` 的 `populated` / E10 删除回执 行追加「单列、不计入 N」 | PRIV-05、COMPLY-11 |
 | Q2 | `## Copywriting Contract` 新增「撤回必选同意项」的 `AlertDialog` 行（紧随「撤回某个同意项」行）；`## 交互契约` 的「一键删除（PRIV-05）」行追加同路径与「无降级只读模式」 | PRIV-02、PRIV-05 |
+
+| A-04 | `## Design System` 的 Preset 行第 4 步（原 `add @shadcn/theme-slate`）与 `## Color` 的基座句；frontmatter `preset` 字段 | Plan 01-03 落地时的实测：`theme-slate` 的 `cssVars` 是 oklch，与本契约 `## Color` 的 hex 表不相等，跑该步会让 `tools/ci/design-tokens.test.ts` 的逐值断言失败。改为按 `## Color` 表逐值落地（有 CI 断言守护）。`--base radix` 未变更（实际 `style: radix-nova`，`radix-ui@1.6.7` 已装），两条禁令（不得 `--template next`、不得让 shadcn 生成 monorepo）均遵守。<br>**订正 01-03-SUMMARY.md 的一处事实错误**：该 SUMMARY 记「`@shadcn/theme-slate` 已不在 registry、registry 只剩 214 项且零 theme 条目」。编排器复核为**不成立** —— `pnpm dlx shadcn@4.21.0 view @shadcn/theme-slate` 退出码 0 并返回完整条目；`init --help` 显示 `-p, --preset [name]` 为可选参数，并非强制。该结论很可能源自 `shadcn search` 对 ui.shadcn.com 的 Connect Timeout 被误读（编排器已复现同一超时）。替换本身按上述 oklch/hex 理由**予以保留**，但依据以本行为准。 |
 
 **另新增（非 A/Q 编号，但同属本 plan 落地）：** `## Copywriting Contract` 的「受托方清单引导句（PRIV-10）」行 —— `{受托方清单}` 为占位符，由 Plan 15 按 `packages/llm/src/routes.ts` 的 ROUTES（`mock` 除外）填充，引导句本身一字不改。它的作用是让 Plan 15 的四条必需句全部以本节为权威来源。
 
