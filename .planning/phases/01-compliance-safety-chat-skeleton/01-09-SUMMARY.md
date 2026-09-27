@@ -378,6 +378,7 @@ status: complete
 6. **vitest 用一条正则在整个文件里找 `@vitest-environment <name>`，不只看首个注释块。** 因此在一个**断言文件**里把这个串写成字面量（用来断言另一个文件带了这个 docblock）会把**自己**切到 jsdom 环境，而 jsdom 下 `import.meta.url` 不是 `file:` —— 顶部的 `fileURLToPath` 直接抛「The URL must be of scheme file」，整个文件 0 test 且 vitest 不说原因。处置：把这个串拼出来（`\`@vitest-\${'environment'} jsdom\``）。
 7. **jsdom 30 不实现 `ResizeObserver`**，而 Radix 的 `@radix-ui/react-use-size`（Checkbox 与 RadioGroup 的指示器都用它）在 layout effect 里直接 `new` 它。已在 `tools/ci/vitest-jsdom-setup.ts` 补一个**不触发回调**的 stub —— 一个会伪造尺寸变化的 stub 会让「布局在某尺寸下正确」这类断言变成自说自话。
 8. **条件 3 的实测发现一个真实泄漏（见下方专节）**：`jsdom` 与 `vitest` 通过「可选 peer」链路进了 apps/api 的生产镜像。
+9. **`requirements.mark-complete` 把 PRIV-01 标成 `- [x]` 之后，`tools/ci/check-contract-amendments.mjs` 的 A-03 提取式立刻报「找不到 PRIV-01 条目行」** —— 它原本只认 `- [ ]`。这是一条会在**每个**标记需求完成的 plan 上重演的断言崩溃（断言在一个预期内的生命周期事件上崩掉，而不是在真实违反上变红）。由编排器在 `94ca966` 修掉（提取式改为两态都认，并在 `--self-test` 里钉住两态 + 一条「两态都认但缺 scope 仍失败」的反向样本）。**后续 plan 在 `update_requirements` 之后应当重跑一次这个检查器** —— 我这次是在标记之前跑的，于是 `077392b` 到 `94ca966` 之间它一直是红的。
 
 ## SKIPPED_CHECKS 变更
 
