@@ -62,7 +62,9 @@ services:
       # TTL 清理作用于它，而一个宿主路径会让「清理范围」取决于部署者怎么挂。
       - export-artifacts:/var/lib/drift/exports
     ports:
-      - '127.0.0.1:${API_HOST_PORT:-3001}:3001'
+      # 绑定地址可配置，默认仅回环。本阶段处理敏感个人信息，监听所有网卡会扩大
+      # 暴露面，因此默认值不是 0.0.0.0；本机试玩需要外部访问时用 API_BIND 显式放开。
+      - '${API_BIND:-127.0.0.1}:${API_HOST_PORT:-3001}:3001'
     healthcheck:
       # 用 node 的 fetch 而不是 curl：镜像里没有 curl，而为了一个探针装一个
       # HTTP 客户端是给攻击面做加法。
@@ -91,7 +93,8 @@ services:
       PORT: '3000'
       NEXT_PUBLIC_API_ORIGIN: ${NEXT_PUBLIC_API_ORIGIN:-}
     ports:
-      - '127.0.0.1:${WEB_HOST_PORT:-3000}:3000'
+      # 同 api：默认仅回环，WEB_BIND 显式放开（见 .env.example）。
+      - '${WEB_BIND:-127.0.0.1}:${WEB_HOST_PORT:-3000}:3000'
     healthcheck:
       test:
         [
