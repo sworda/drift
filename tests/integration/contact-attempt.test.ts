@@ -279,6 +279,34 @@ describe('(d)(e) 服务端超时：条件更新，幂等', () => {
     expect((await readAttempt(seeded.userId))?.status).toBe('failed');
   });
 
+  it('端到端：pg-boss 真的取件并执行作业体（不只是「排上了」）', async () => {
+    // ⚠️ 这一条补的是一个真实的缝：上面那条用例直接调 expireContactAttempt（作业体），
+    // pgboss-delay-api.test.ts 只断言「排上了、延迟是 600±5 秒」。两者都不证明
+    // **pg-boss 到期后会取件并把作业体跑起来** —— 队列策略、startAfter 与 worker
+    // 取件之间的交互只有真跑一次才能证明。这里用 startAfter: 0 跑同一条链路：
+    // 被证明的是接线，延迟值本身由 pgboss-delay-api 的窗口断言负责。
+    const { seeded } = await runCrisisTurn('contact-e2e', okWebhook(), 'enc:13812341234');
+    const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
+    expect((await readAttempt(seeded.userId))?.status).toBe('pending');
+
+    await boss.send(
+      'contact-attempt-timeout',
+      { attemptId },
+      { startAfter: 0, singletonKey: `${attemptId}-e2e` },
+    );
+
+    const deadline = Date.now() + 30_000;
+    let status = 'pending';
+    while (Date.now() < deadline) {
+      status = (await readAttempt(seeded.userId))?.status ?? 'pending';
+      if (status === 'failed') break;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    expect(status, 'worker 没有在 30 秒内把到期的 pending 扫成 failed —— 作业体没有被取件').toBe(
+      'failed',
+    );
+  }, 60_000);
+
   it('超时作业不会把一个已经 delivered 的行改回 failed', async () => {
     const { seeded } = await runCrisisTurn('contact-d2', okWebhook(), 'enc:13812341234');
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
