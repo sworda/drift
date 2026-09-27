@@ -126,12 +126,15 @@ describe('法定语义色 token（UI-SPEC ## Color〔法定〕）', () => {
   });
 
   it('聊天页确实挂载了常驻条组件（否则上一条断言测的是一个没人用的组件）', () => {
-    const chatPage = readFileSync(
-      `${REPO_ROOT}apps/web/src/app/(app)/chat/[conversationId]/page.tsx`,
+    // Plan 14 起聊天页是薄壳，渲染搬进 features/chat/chat-client.tsx（客户端编排，
+    // 因为消息流与 WS 事件需要浏览器身份）。断言跟组件搬家 —— 与上面「断言跟着
+    // 组件走」同一条先例：继续扫薄壳页会让这条检查失去被测对象（空真）。
+    const chatClient = readFileSync(
+      `${REPO_ROOT}apps/web/src/features/chat/chat-client.tsx`,
       'utf8',
     );
     // 无条件渲染：没有三元、没有 &&。一个只在某些情况下出现的法定告知等于没告知。
-    expect(chatPage).toContain('<AiBanner />');
+    expect(chatClient).toContain('<AiBanner />');
   });
 
   it('AI 标识文案在全仓各只有一处定义（不可被分叉、不由服务端下发）', () => {

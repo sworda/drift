@@ -1,6 +1,6 @@
 'use client';
 
-// 聊天消息流（CHAT-03 / CHAT-07 · COMPLY-01）。
+// 聊天消息流（CHAT-03 / CHAT-06 / CHAT-07 · COMPLY-01）。
 //
 // ── UI-SPEC 的不可协商项（逐条对应）──────────────────────────────────────────
 //   - `BubbleContent` 的上游默认字号是 14px → **必须覆写为 text-base**（16px），
@@ -17,16 +17,17 @@
 //（全宽、Alert 基座、无气泡形态）。一级关怀卡片内联插在消息流里触发它的那条用户
 //   消息之后；二级关怀卡片挂 sticky 层置顶阻断。
 //
+// ── 三种非常规消息行（Plan 14）──────────────────────────────────────────────
+//   - system 行（硬退出的中性系统卡片）：ExitSystemCard（Alert 基座、neutral、
+//     不吃 care），不进气泡原语（R1.24 同一条理由）。
+//   - 未读分割线（CHAT-06）：首条未读前插入，父层定位一次后不消失。
+//   - 加载失败态：错误文案 + 重试 —— 不得静默渲染成空消息流（与空列表同一条禁令）。
+//
 // ── 为什么不用 shadcn 的 message-scroller ───────────────────────────────────
 // 它会引入一个新的外部依赖（@shadcn/react），而它唯一难以自己实现的能力是虚拟
 // 滚动 —— UI-SPEC 明确 v1 不做虚拟滚动。剩下的「新消息贴底」就是下面那个 useEffect。
-// 聊天滚动行为恰好是 UI-SPEC 硬约束最密集的地方（补拉期间输入框可用、新消息进
-//「发送中」态、拿到终态原地替换且不重排不改焦点），这几行自己拿着更稳。
 //
 // ⚠️ Phase 1 是**整段生成**（D-24），不存在任何增量下发路径。
-// （这里刻意不把那两个 AI SDK 流式函数名原样写出来：
-//  tools/ci/design-tokens.test.ts 对 packages/ 与 apps/ 做一次**字面**扫描并要求
-//  命中数为 0，连注释里的引用都会让它变红 —— 那不是断言过于粗暴，而是它刻意如此。）
 // 流式与 CHAT-07 和出站安全网关在结构上不相容：chunk 没有 seq，重连补拉拿不到
 // 半条消息；逐 token 流出则绕过了出站安全网关。
 
@@ -36,6 +37,9 @@ import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import { Message, MessageContent, MessageFooter, MessageGroup } from '@/components/ui/message';
 
 import { CareCard, type CareCardData } from '../crisis/care-card';
+import { ExitSystemCard } from './exit-system-card';
+import { LIST_LOAD_ERROR_COPY } from './copy';
+import { UnreadSeparator } from './unread-separator';
 
 export interface ChatMessage {
   readonly messageId: string;
@@ -61,13 +65,21 @@ export interface ChatViewProps {
   /** 服务端正在生成。整段生成 ⇒ 这段时长天然等于实际生成时间（REAL-03）。 */
   readonly typing?: boolean;
   /**
-   * 危机关怀卡片（TurnResult.reply.escalated.careCard）。
+   * 危机关怀卡片（TurnResult.reply.escalated.careCard / WS safety.care_card）。
    * 一级内联插在消息流里，二级 sticky 置顶阻断。undefined = 本会话当前没有
    * 未确认的危机态。
    */
-  readonly crisisCard?: CareCardData;
+  readonly crisisCard?: CareCardData | undefined;
   /** 一级卡片插在哪条消息之后（通常是触发危机的那条用户消息）。缺省 = 消息流末尾。 */
-  readonly crisisAfterMessageId?: string;
+  readonly crisisAfterMessageId?: string | undefined;
+  /** 首条未读的 seq（CHAT-06 分割线定位）。null = 无未读，不渲染分割线。 */
+  readonly firstUnreadSeq?: number | null | undefined;
+  /** 聊天空态标题/正文（UI-SPEC ## Copywriting Contract 聊天空态行）。 */
+  readonly emptyHeading?: string | undefined;
+  readonly emptyBody?: string | undefined;
+  /** 首载失败（与空消息流必须可区分 —— 不得静默渲染成「还没有开始」）。 */
+  readonly loadFailed?: boolean | undefined;
+  readonly onRetryLoad?: (() => void) | undefined;
 }
 
 export function ChatView({
@@ -75,6 +87,11 @@ export function ChatView({
   typing = false,
   crisisCard,
   crisisAfterMessageId,
+  firstUnreadSeq,
+  emptyHeading,
+  emptyBody,
+  loadFailed = false,
+  onRetryLoad,
 }: ChatViewProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -96,6 +113,9 @@ export function ChatView({
       <CareCard card={crisisCard} />
     ) : null;
 
+  // 分割线渲染在首条 seq >= firstUnreadSeq 的消息之前（CHAT-06）。
+  const unreadSeq = firstUnreadSeq ?? null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* 32px AI 常驻条由聊天页渲染（components/ai-banner.tsx，法定组件）—— 消息流
@@ -105,11 +125,26 @@ export function ChatView({
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-md py-md">
         {stickyCard}
         {messages.length === 0 ? (
-          // 空态：有文案与下一步，不是静默的空容器（UI-SPEC 不可协商项）。
-          inlineCard === null ? (
-            <p className="px-md py-lg text-body text-text-secondary">
-              还没有消息。发一条打个招呼吧。
-            </p>
+          loadFailed ? (
+            // 错误态 ≠ 空态：文案含下一步（重试），不静默渲染成「还没有开始」。
+            <div role="alert" className="flex flex-col items-start gap-sm px-md py-lg">
+              <p className="text-body text-destructive">{LIST_LOAD_ERROR_COPY}</p>
+              {onRetryLoad !== undefined ? (
+                <button
+                  type="button"
+                  onClick={onRetryLoad}
+                  className="text-body text-primary underline underline-offset-4"
+                >
+                  重试
+                </button>
+              ) : null}
+            </div>
+          ) : inlineCard === null ? (
+            // 空态：有文案与下一步，不是静默的空容器（UI-SPEC 不可协商项）。
+            <div className="px-md py-lg">
+              <p className="text-body font-semibold text-text-primary">{emptyHeading}</p>
+              <p className="mt-xs text-body text-text-secondary">{emptyBody}</p>
+            </div>
           ) : (
             inlineCard
           )
@@ -122,20 +157,33 @@ export function ChatView({
                 (crisisAfterMessageId === undefined
                   ? index === messages.length - 1
                   : entry.messageId === crisisAfterMessageId);
+              const previous = index > 0 ? messages[index - 1] : undefined;
+              const separatorBefore =
+                unreadSeq !== null &&
+                entry.seq >= unreadSeq &&
+                (previous === undefined || previous.seq < unreadSeq);
               return (
                 <div key={entry.messageId} className="contents">
-                  <Message align={isUser ? 'end' : 'start'}>
-                    <MessageContent>
-                      <Bubble variant={isUser ? 'default' : 'secondary'} align={isUser ? 'end' : 'start'}>
-                        {/* text-base 覆写上游默认的 14px。padding 保持默认的 12/8。 */}
-                        <BubbleContent className="text-base">{entry.text}</BubbleContent>
-                      </Bubble>
-                      {/* 时间戳在气泡**外**。用户气泡（accent 填充）内不承载次级文本。 */}
-                      <MessageFooter>
-                        {entry.pending === true ? '发送中' : formatTime(entry.createdAt)}
-                      </MessageFooter>
-                    </MessageContent>
-                  </Message>
+                  {separatorBefore ? <UnreadSeparator /> : null}
+                  {entry.senderKind === 'system' ? (
+                    // 硬退出的中性系统卡片：Alert 基座、neutral、无任何按钮。
+                    <ExitSystemCard text={entry.text} />
+                  ) : (
+                    <Message align={isUser ? 'end' : 'start'}>
+                      <MessageContent>
+                        <Bubble variant={isUser ? 'default' : 'secondary'} align={isUser ? 'end' : 'start'}>
+                          {/* text-base 覆写上游默认的 14px。padding 保持默认的 12/8。 */}
+                          <BubbleContent className="max-w-[80%] text-base break-words whitespace-normal">
+                            {entry.text}
+                          </BubbleContent>
+                        </Bubble>
+                        {/* 时间戳在气泡**外**。用户气泡（accent 填充）内不承载次级文本。 */}
+                        <MessageFooter>
+                          {entry.pending === true ? '发送中' : formatTime(entry.createdAt)}
+                        </MessageFooter>
+                      </MessageContent>
+                    </Message>
+                  )}
                   {insertCardAfter ? inlineCard : null}
                 </div>
               );

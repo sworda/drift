@@ -11,6 +11,7 @@
   "dependencies": {
     "@ai-sdk/react": "4.0.117",
     "@drift/contract": "workspace:*",
+    "@drift/safety": "workspace:*",
     "class-variance-authority": "0.7.1",
     "cn": "0.4.0",
     "lucide-react": "1.48.0",
@@ -23,7 +24,6 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@drift/safety": "workspace:*",
     "@tailwindcss/postcss": "4.3.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

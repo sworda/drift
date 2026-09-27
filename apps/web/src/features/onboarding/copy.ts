@@ -55,3 +55,7 @@ export const PASSWORD_LABEL = '密码';
 export const NAME_LABEL = '昵称';
 export const BIRTH_DATE_LABEL = '出生日期';
 export const NEXT_STEP_LABEL = '下一步';
+
+/** 注册成功的落点提示（Plan 14：走查顺序 注册 → 角色库）。 */
+export const REGISTER_DONE_TITLE = '注册完成';
+export const REGISTER_DONE_BODY = '你已经注册成功。接下来去角色库挑一个感兴趣的角色，加为好友后就可以开始聊了。';

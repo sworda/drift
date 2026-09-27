@@ -1,15 +1,108 @@
-// 会话列表（CHAT-05 / CHAT-06 / COMPLY-01）。AI 明示标识的四处落点之一〔法定〕：
-// 每行标题后紧跟「AI」徽标，标题 truncate、徽标 shrink-0 —— 徽标不得因标题过长
-// 被挤出或省略。真实数据与徽标渲染在 Plan 04 接入（显隐由会话级
-// conversation.counterpart_kind 驱动，文案是常量、不由服务端下发）。
+'use client';
+
+// 会话列表页（CHAT-05 / CHAT-06 / COMPLY-01）。
+//
+// 客户端组件：身份是 Authorization: Bearer（lib/session.ts），服务端组件拿不到
+// 浏览器存储里的 token —— 与隐私中心页同一条先例。
+//
+// 空态 / 错误态 / 加载骨架三态可区分（UI-SPEC 不可协商项）：加载失败渲染错误文案
+// + 重试，绝不静默渲染成「还没有任何对话」。
+
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+
+import {
+  ConversationList,
+  type ConversationListItem,
+} from '@/features/conversations/conversation-list';
+import { authedFetch } from '@/lib/session';
+
+import {
+  CONVERSATIONS_EMPTY_BODY,
+  CONVERSATIONS_EMPTY_CTA,
+  CONVERSATIONS_EMPTY_HEADING,
+  CONVERSATIONS_RETRY_LABEL,
+  CONVERSATIONS_TITLE,
+} from '@/features/conversations/copy';
+import { LIST_LOAD_ERROR_COPY } from '@/features/chat/copy';
+
+type LoadState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error' }
+  | { readonly kind: 'ok'; readonly conversations: readonly ConversationListItem[] };
 
 export default function ConversationsPage() {
+  const [state, setState] = useState<LoadState>({ kind: 'loading' });
+
+  const load = useCallback(async () => {
+    setState({ kind: 'loading' });
+    try {
+      const response = await authedFetch('/conversations');
+      if (!response.ok) {
+        setState({ kind: 'error' });
+        return;
+      }
+      const body = (await response.json()) as { conversations: ConversationListItem[] };
+      setState({ kind: 'ok', conversations: body.conversations });
+    } catch {
+      setState({ kind: 'error' });
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   return (
     <main className="mx-auto min-h-dvh w-full max-w-[480px]">
-      <h1 className="px-md py-lg text-heading font-semibold text-text-primary">消息</h1>
-      <p className="px-md text-body text-text-secondary">
-        还没有会话。从角色库添加一个角色为好友后，会话会出现在这里。
-      </p>
+      <h1 className="px-md py-lg text-heading font-semibold text-text-primary">
+        {CONVERSATIONS_TITLE}
+      </h1>
+
+      {state.kind === 'loading' ? (
+        // 骨架：固定 72px 行高 ×6，与真实行一致 —— 加载完成不产生布局跳动。
+        <div data-testid="conversation-skeleton" aria-hidden="true" className="flex flex-col">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div key={index} className="flex h-conversation-row items-center gap-md-tight px-md">
+              <span className="size-12 shrink-0 animate-pulse rounded-full bg-character-bubble" />
+              <span className="flex flex-1 flex-col gap-xs">
+                <span className="h-5 w-28 animate-pulse rounded bg-character-bubble" />
+                <span className="h-4 w-44 animate-pulse rounded bg-character-bubble" />
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {state.kind === 'error' ? (
+        <div role="alert" className="flex flex-col items-start gap-sm px-md py-lg">
+          <p className="text-body text-destructive">{LIST_LOAD_ERROR_COPY}</p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="text-body text-primary underline underline-offset-4"
+          >
+            {CONVERSATIONS_RETRY_LABEL}
+          </button>
+        </div>
+      ) : null}
+
+      {state.kind === 'ok' && state.conversations.length === 0 ? (
+        <div className="flex flex-col items-start gap-sm px-md py-lg">
+          <p className="text-body font-semibold text-text-primary">{CONVERSATIONS_EMPTY_HEADING}</p>
+          <p className="text-body text-text-secondary">{CONVERSATIONS_EMPTY_BODY}</p>
+          <Link
+            href="/characters"
+            className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-md text-base text-primary-foreground"
+          >
+            {CONVERSATIONS_EMPTY_CTA}
+          </Link>
+        </div>
+      ) : null}
+
+      {state.kind === 'ok' && state.conversations.length > 0 ? (
+        <ConversationList conversations={state.conversations} />
+      ) : null}
     </main>
   );
 }

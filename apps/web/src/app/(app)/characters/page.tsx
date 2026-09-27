@@ -1,52 +1,115 @@
-// 角色库（CHAT-01 / CHAT-02 / COMPLY-08）。
+'use client';
+
+// 角色库（CHAT-01 / CHAT-02 / COMPLY-08）。客户端组件：身份在浏览器存储
+//（lib/session.ts），服务端组件拿不到 —— 与会话列表页同一条先例（Plan 14 把
+// 它从服务端 fetch 改造过来：那版在真实浏览器会话里永远落在 401 空态）。
 //
-// Server Component：真实数据由 apps/api 的 GET /characters 提供。
-// 会话凭证还没有前端载体（登录 UI 属 Plan 09），所以这里在**未登录时渲染空态**
-// 而不是渲染假数据 —— 一个填着占位角色的列表会让「角色库接通了吗」这个问题
-// 无法回答。空态与错误态分开渲染（UI-SPEC 不可协商项）。
+// 三态可区分：骨架（72px 行 ×6）/ 错误（重试）/ 空态。空态分两种（UI-SPEC E2）：
+// 一个角色都没有（seed 前），与全部已添加（按 friendship 判定）。
 
-import { CharacterList, type CharacterListItem } from '@/features/characters/character-list';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 
-const API_ORIGIN = process.env['NEXT_PUBLIC_API_ORIGIN'] ?? 'http://127.0.0.1:3001';
+import {
+  CharacterList,
+  type CharacterListItem,
+} from '@/features/characters/character-list';
+import { LIST_LOAD_ERROR_COPY } from '@/features/chat/copy';
+import { authedFetch } from '@/lib/session';
 
-type LoadResult =
-  | { readonly kind: 'ok'; readonly characters: readonly CharacterListItem[] }
-  | { readonly kind: 'unauthenticated' }
-  | { readonly kind: 'error' };
+const CHARACTERS_TITLE = '角色库';
+const ALL_ADDED_HEADING = '预设角色都已经在你的列表里了';
+const ALL_ADDED_BODY = '回到会话列表继续聊天。更多角色会陆续加入。';
+const ALL_ADDED_GOTO = '回到会话列表';
+const RETRY_LABEL = '重试';
 
-async function loadCharacters(): Promise<LoadResult> {
-  try {
-    const response = await fetch(`${API_ORIGIN}/characters`, { cache: 'no-store' });
-    if (response.status === 401) return { kind: 'unauthenticated' };
-    if (!response.ok) return { kind: 'error' };
-    const body = (await response.json()) as { characters: CharacterListItem[] };
-    return { kind: 'ok', characters: body.characters };
-  } catch {
-    return { kind: 'error' };
-  }
-}
+type LoadState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error' }
+  | { readonly kind: 'ok'; readonly characters: readonly CharacterListItem[]; readonly allAdded: boolean };
 
-export default async function CharactersPage() {
-  const result = await loadCharacters();
+export default function CharactersPage() {
+  const [state, setState] = useState<LoadState>({ kind: 'loading' });
+
+  const load = useCallback(async () => {
+    setState({ kind: 'loading' });
+    try {
+      const [charactersResponse, conversationsResponse] = await Promise.all([
+        authedFetch('/characters'),
+        authedFetch('/conversations'),
+      ]);
+      if (!charactersResponse.ok || !conversationsResponse.ok) {
+        setState({ kind: 'error' });
+        return;
+      }
+      const charactersBody = (await charactersResponse.json()) as {
+        characters: CharacterListItem[];
+      };
+      const conversationsBody = (await conversationsResponse.json()) as {
+        conversations: readonly { readonly characterId: string }[];
+      };
+      const added = new Set(conversationsBody.conversations.map((conversation) => conversation.characterId));
+      setState({
+        kind: 'ok',
+        characters: charactersBody.characters,
+        allAdded:
+          charactersBody.characters.length > 0 &&
+          charactersBody.characters.every((character) => added.has(character.id)),
+      });
+    } catch {
+      setState({ kind: 'error' });
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-[480px]">
-      <h1 className="px-md py-lg text-heading font-semibold text-text-primary">角色库</h1>
+      <h1 className="px-md py-lg text-heading font-semibold text-text-primary">{CHARACTERS_TITLE}</h1>
 
-      {result.kind === 'ok' ? <CharacterList characters={result.characters} /> : null}
-
-      {result.kind === 'unauthenticated' ? (
-        <p className="px-md text-body text-text-secondary">
-          需要先登录才能浏览角色库。登录入口随注册流程一起上线。
-        </p>
+      {state.kind === 'loading' ? (
+        <div aria-hidden="true" className="flex flex-col">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div key={index} className="flex h-conversation-row items-center gap-md-tight px-md">
+              <span className="size-12 shrink-0 animate-pulse rounded-full bg-character-bubble" />
+              <span className="flex flex-1 flex-col gap-xs">
+                <span className="h-5 w-24 animate-pulse rounded bg-character-bubble" />
+                <span className="h-4 w-44 animate-pulse rounded bg-character-bubble" />
+              </span>
+            </div>
+          ))}
+        </div>
       ) : null}
 
-      {result.kind === 'error' ? (
-        // 错误态与空态必须可区分，且文案必须含「下一步做什么」（UI-SPEC）。
-        <p className="px-md text-body text-destructive">
-          没能加载角色库。请检查网络后重试；如果一直这样，稍后再打开这一页。
-        </p>
+      {state.kind === 'error' ? (
+        <div role="alert" className="flex flex-col items-start gap-sm px-md py-lg">
+          <p className="text-body text-destructive">{LIST_LOAD_ERROR_COPY}</p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="text-body text-primary underline underline-offset-4"
+          >
+            {RETRY_LABEL}
+          </button>
+        </div>
       ) : null}
+
+      {state.kind === 'ok' && state.allAdded ? (
+        <div className="flex flex-col items-start gap-sm px-md py-lg">
+          <p className="text-body font-semibold text-text-primary">{ALL_ADDED_HEADING}</p>
+          <p className="text-body text-text-secondary">{ALL_ADDED_BODY}</p>
+          <Link
+            href="/conversations"
+            className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-md text-base text-primary-foreground"
+          >
+            {ALL_ADDED_GOTO}
+          </Link>
+        </div>
+      ) : null}
+
+      {state.kind === 'ok' && !state.allAdded ? <CharacterList characters={state.characters} /> : null}
     </main>
   );
 }

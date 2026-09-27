@@ -15,12 +15,14 @@
 // 页面里不得再出现第二个 28px 元素。
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 
 import { type ConsentScope } from '@drift/contract';
 
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { API_ORIGIN, saveSessionToken } from '@/lib/session';
 
 import { AgeGate, isRejectedByAgeGate } from './age-gate';
 import { ConsentCheckboxes } from './consent-checkboxes';
@@ -38,6 +40,8 @@ import {
   NEXT_STEP_LABEL,
   PASSWORD_LABEL,
   REGISTER_CTA,
+  REGISTER_DONE_BODY,
+  REGISTER_DONE_TITLE,
   REGISTER_RETRY_LABEL,
   REGISTER_SUBMIT_ERROR,
   STEP_TITLES,
@@ -92,13 +96,24 @@ export interface OnboardingStepsProps {
   readonly initialConsents?: ConsentSelection | undefined;
 }
 
+// 注册成功后的去向（成功标准 1 的走查顺序：注册 → 角色库 → 会话）。
+export const REGISTER_DONE_TESTID = 'register-done';
+export const REGISTER_DONE_GOTO = '去角色库挑一个角色';
+
 async function defaultSubmit(request: RegisterRequest): Promise<void> {
-  const response = await fetch('/auth/register', {
+  // 直连 API（跨源）。相对路径会打到 Next 自己身上 —— compose 栈里 Caddy 只把
+  // /ws /telemetry /healthz 交给 api，其余全部是 web，相对路径 /auth/register 在
+  // 浏览器里永远 404（Plan 14 实测定稿；注册走查曾在这里卡死的原因）。
+  const response = await fetch(`${API_ORIGIN}/auth/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(request),
   });
   if (!response.ok) throw new Error(`register failed: ${String(response.status)}`);
+  // 会话载体：服务的身份解析只认 Authorization: Bearer（auth/session.ts），不认
+  // cookie —— 存下 token，后续页面的 authedFetch 才有身份可附。
+  const body = (await response.json()) as { sessionToken: string };
+  saveSessionToken(body.sessionToken);
 }
 
 export function OnboardingSteps({
@@ -120,6 +135,7 @@ export function OnboardingSteps({
   const [showContactErrors, setShowContactErrors] = useState(false);
   const [pending, setPending] = useState(false);
   const [submitFailed, setSubmitFailed] = useState(false);
+  const [done, setDone] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   const rejected = isRejectedByAgeGate(account.birthDate, now);
@@ -158,6 +174,7 @@ export function OnboardingSteps({
         consents: toRequestPayload(consents),
         emergencyContact: contact,
       });
+      setDone(true);
     } catch {
       // 已填内容一个字段都不清 —— 文案明说「你填的内容都还在」。
       setSubmitFailed(true);
@@ -167,6 +184,24 @@ export function OnboardingSteps({
       setPending(false);
     }
   }, [account, canSubmit, consents, contact, focusFirstInvalid, pending, submit]);
+
+  // 注册成功：落点是角色库（成功标准 1 的走查顺序）。仍是同一颗主 CTA 的语义 ——
+  // 「完成注册，开始使用」之后的「开始使用」。
+  if (done) {
+    return (
+      <main className="mx-auto flex max-w-xl flex-col gap-6 p-6">
+        <h1 className={STEP_TITLE_CLASS}>{REGISTER_DONE_TITLE}</h1>
+        <p className="text-base text-text-secondary">{REGISTER_DONE_BODY}</p>
+        <Link
+          href="/characters"
+          data-testid={REGISTER_DONE_TESTID}
+          className="inline-flex h-11 w-fit items-center justify-center rounded-lg bg-primary px-md text-base text-primary-foreground"
+        >
+          {REGISTER_DONE_GOTO}
+        </Link>
+      </main>
+    );
+  }
 
   // 18 岁终态拒绝：整页只剩那段文案，**没有**任何出口（含本组件的下一步按钮）。
   if (rejected) {

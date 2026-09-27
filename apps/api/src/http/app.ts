@@ -8,6 +8,7 @@ import { env } from '../config/env.ts';
 import { authRoutes } from '../modules/auth/routes.ts';
 import { characterRoutes } from '../modules/characters/routes.ts';
 import { chatRoutes } from '../modules/chat/routes.ts';
+import { conversationsRoutes } from '../modules/conversations/routes.ts';
 import { consentRoutes } from '../modules/consent/routes.ts';
 import { friendshipRoutes } from '../modules/friendship/routes.ts';
 import { deleteRoutes } from '../modules/privacy/delete-routes.ts';
@@ -52,6 +53,7 @@ export function createApp(): Hono {
   app.route('/', exportRoutes);
   app.route('/', characterRoutes);
   app.route('/', friendshipRoutes);
+  app.route('/', conversationsRoutes);
   app.route('/', chatRoutes);
   // 运营者后台（D-09/D-10）。认证与用户 session **完全分离**（x-operator-token），
   // 见 modules/safety/routes.ts 的文件头。

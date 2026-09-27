@@ -41,7 +41,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 
 import { call } from '@drift/llm';
 import { buildChatReplyPrompt } from '@drift/prompts';
@@ -499,9 +499,15 @@ export async function runTurn(
         await afterTouchUsage(characterTurn.usage, input.userId, scheduler);
       }
     }
+    // 角色消息落库后：刷新 last_message_at 并把 unread_count +1（CHAT-05/06）。
+    // 离线不推、上线补拉 —— 但「补拉之前发生过什么」要靠未读数在会话列表上先被
+    // 看见。用户消息不计数：自己的发言不是未读。
     await db
       .update(conversation)
-      .set({ lastMessageAt: characterMessage.createdAt })
+      .set({
+        lastMessageAt: characterMessage.createdAt,
+        unreadCount: sql`${conversation.unreadCount} + 1`,
+      })
       .where(eq(conversation.id, prepared.conversation.id));
 
     const delivered = deliver(

@@ -32,3 +32,23 @@ export const EXIT_INPUT_PLACEHOLDER = '本次会话已结束';
 
 /** 「更多」Sheet 里的显式退出入口（第十九条的窗口操作退出途径）。 */
 export const END_SESSION_LABEL = '结束本次会话';
+
+/** 未读分割线（CHAT-06，UI-SPEC ## Copywriting Contract 逐字）。 */
+export const UNREAD_SEPARATOR_COPY = '以下是你离开后的消息';
+
+/** 聊天空态（新会话无消息，UI-SPEC ## Copywriting Contract 逐字；{角色名} 运行时替换）。 */
+export const CHAT_EMPTY_HEADING = '还没有开始';
+export const CHAT_EMPTY_BODY_TEMPLATE = '说点什么，{角色名} 会回你。';
+
+/** 断连补拉细条（CHAT-07，UI-SPEC ## Copywriting Contract 逐字）。 */
+export const RECONNECTING_COPY = '连接断开，正在重新连接…… 重连后会自动补齐这段时间的消息。';
+
+/** 列表加载失败（角色库 / 会话列表 / 角色详情共用一行，UI-SPEC 逐字）。 */
+export const LIST_LOAD_ERROR_COPY = '没能加载出来 —— 网络或服务器暂时没有响应。点「重试」再试一次。';
+
+/** 消息发送失败（CHAT-03，UI-SPEC 逐字）。 */
+export const SEND_FAILED_COPY = '这条消息没有发出去 —— 网络似乎断开了。点这条消息重试。';
+
+/** 重试控件（图标旁的 13px 可见文字；aria-label 见 MESSAGE_RETRY_ARIA）。 */
+export const MESSAGE_RETRY_LABEL = '重试';
+export const MESSAGE_RETRY_ARIA = '重试发送这条消息';
