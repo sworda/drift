@@ -179,4 +179,29 @@ export default [
       '@typescript-eslint/no-unsafe-return': 'off',
     },
   },
+  {
+    // 负向 fixture（V.0 #2）：any 穿过接受 GatedText 的出口。
+    //
+    // ⚠️ 上面那个 fixtures 块把四条 no-unsafe-* 关掉了（那些 fixture 不属于任何
+    // tsconfig）。但 no-unsafe-argument **只有 type-aware 才会被求值** —— 对这一个
+    // fixture 沿用那份配置，等于让它永远是绿的，而它的全部意义恰恰是证明「any 通道
+    // 被堵住了」这句话非空真。因此这一个文件有自己的 tsconfig，并在此把四条规则重新
+    // 打开。块的位置必须在 fixtures 块**之后**：flat config 后块覆盖前块。
+    files: ['tools/ci/fixtures/any-into-egress.ts'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        projectService: false,
+        project: './tools/ci/fixtures/tsconfig.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    plugins: { '@typescript-eslint': tsPlugin },
+    rules: {
+      'no-restricted-syntax': ['error', ...REQUIRED_RESTRICTED_SYNTAX],
+      'no-restricted-imports': restrictedImports(),
+      ...TYPE_AWARE_ANY_DEFENSE,
+    },
+  },
 ];
+

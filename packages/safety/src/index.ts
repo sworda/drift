@@ -3,3 +3,4 @@
 // string 提升为 GatedText。
 
 export * from './gateway.ts';
+export * from './egress.ts';

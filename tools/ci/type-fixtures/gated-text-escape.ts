@@ -29,3 +29,12 @@ deliver(synthetic);
 // 编译期挡不住断言，只有 lint 能挡。
 export const byAssertion = rawFromModel as GatedText;
 export const byDoubleAssertion = rawFromModel as unknown as GatedText;
+
+// 违反 5：satisfies **不是**断言 —— 它要求类型真的成立，因此这一行必须报错。
+// 这一条是有意加的：上面两行不报错，如果哪天品牌类型退化成 string 别名，
+// 违反 1-4 会一起消失，而报错数阈值是本 fixture 唯一的信号。satisfies 让
+// 「GatedText 确实不是任意 string」这句话多一个独立的报错源。
+export const bySatisfies = rawFromModel satisfies GatedText;
+
+// 违反 6：SyntheticText 同样不满足 GatedText（两个品牌互不相容）。
+export const crossBrandSatisfies = synthetic satisfies GatedText;
