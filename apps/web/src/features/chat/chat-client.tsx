@@ -339,18 +339,15 @@ export function ChatClient({ conversationId }: { readonly conversationId: string
         <span className="flex min-w-0 flex-1 items-center gap-sm">
           {loadState.kind === 'loading' ? (
             // 加载期占位（法定标识不允许闪缺：徽标常驻，名字以骨架占位）。
-            <>
-              <span aria-hidden="true" className="h-5 w-24 animate-pulse rounded bg-character-bubble" />
-              <AiBadge data-testid="ai-badge-chat-header" />
-            </>
+            <span aria-hidden="true" className="h-5 w-24 shrink-0 animate-pulse rounded bg-character-bubble" />
           ) : (
-            <>
-              <span className="truncate text-body font-semibold text-text-primary">{characterName}</span>
-              {conversation?.counterpartKind === 'ai_character' ? (
-                <AiBadge data-testid="ai-badge-chat-header" />
-              ) : null}
-            </>
+            <span className="truncate text-body font-semibold text-text-primary">{characterName}</span>
           )}
+          {/* 徽标不在 loading 分支内 —— 两个分支都渲染它，显隐只由 counterpart_kind
+              驱动（tools/ci/disclosure-surfaces.test.ts (e) 的静态白名单盯住这一点）。 */}
+          {conversation?.counterpartKind === 'ai_character' ? (
+            <AiBadge data-testid="ai-badge-chat-header" />
+          ) : null}
         </span>
         <button
           type="button"

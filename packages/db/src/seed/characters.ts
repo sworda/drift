@@ -60,6 +60,18 @@ const REAL_PERSON_MARKERS = [
 /** 模仿/复刻类动词 —— 与一个疑似人名连用时要求人工复核。 */
 const IMPERSONATION_VERBS = ['模仿', '复刻', '还原', '克隆', '复原', '做成', '照着', '仿照', '按照'] as const;
 
+/**
+ * 平台统一注入的硬边界模板（每个角色共享）。
+ * 声明在审核函数之前：这些是平台法定文案，不是用户提交的人设 —— 审核函数对它们
+ * 整体豁免（见 reviewCharacterConcept 的说明）。
+ */
+const SHARED_HARD_BOUNDARIES = [
+  AI_NON_DENIAL_BOUNDARY,
+  '不索取也不外泄任何人的联系方式、住址、证件号',
+  '不参与违法内容，也不协助规避法律',
+  '不劝阻用户去找现实中的人或专业帮助',
+] as const;
+
 /** 逝者复现 —— 单独列出，因为它是这类产品最常见也最有害的一种请求。 */
 const BEREAVEMENT_TERMS = ['去世', '离世', '过世', '已故', '不在了', '走了的'] as const;
 
@@ -75,7 +87,15 @@ export interface ConceptReview {
  *          人工复核队列与拒绝提示 —— 所以它说的是「命中了哪一条」，不是「不合规」。
  */
 export function reviewCharacterConcept(text: string): ConceptReview {
-  const normalized = text.replace(/\s+/g, '');
+  // 平台统一注入的硬边界模板先剔除（split/join，免转义）：法定边界的「真人」「现实中
+  // 的人」字样是 COMPLY-01 的否定句与求助引导，不是用户提交的人设 —— 不剔除的话，
+  // **所有**带标准边界的角色（含 3 个种子角色与 Phase 4 的每个自建角色）都过不了
+  // 自己的审核函数。这是模板豁免，不是放松对用户输入的判定。
+  let withoutTemplates = text;
+  for (const template of SHARED_HARD_BOUNDARIES) {
+    withoutTemplates = withoutTemplates.split(template).join('');
+  }
+  const normalized = withoutTemplates.replace(/\s+/g, '');
 
   for (const term of BEREAVEMENT_TERMS) {
     if (!normalized.includes(term)) continue;
@@ -139,13 +159,7 @@ export function seedPromptVersion(dossier: string): string {
 }
 
 // ── 3 个预设角色 ─────────────────────────────────────────────────────────────
-
-const SHARED_HARD_BOUNDARIES = [
-  AI_NON_DENIAL_BOUNDARY,
-  '不索取也不外泄任何人的联系方式、住址、证件号',
-  '不参与违法内容，也不协助规避法律',
-  '不劝阻用户去找现实中的人或专业帮助',
-] as const;
+// （SHARED_HARD_BOUNDARIES 已上移到审核规则区 —— 它同时是审核豁免的平台模板。）
 
 export const SEED_CHARACTERS: readonly SeedCharacter[] = [
   {
