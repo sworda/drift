@@ -20,12 +20,16 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
+import { EMERGENCY_CONTACT_KINDS, type EmergencyContactKind } from '@drift/contract';
+
 import { inValues, newId } from '../sql-helpers.ts';
 import { inviteCode } from './invite.ts';
 
-/** 紧急联系人的两种角色。未满 18 的监护人与成年用户自填的紧急联系人不是同一件事。 */
-export const EMERGENCY_CONTACT_KINDS = ['guardian', 'emergency'] as const;
-export type EmergencyContactKind = (typeof EMERGENCY_CONTACT_KINDS)[number];
+/**
+ * 紧急联系人的两种角色。**定义在 @drift/contract** —— 注册页的二选一单选在 apps/web，
+ * 而 apps/web 不能 import @drift/db（后者加载即要 DATABASE_URL）。这里只再导出。
+ */
+export { EMERGENCY_CONTACT_KINDS, type EmergencyContactKind };
 
 /**
  * 可达性。D-22：Phase 1 一律记为 `unconfirmed` —— 我们没有任何手段证明一个号码

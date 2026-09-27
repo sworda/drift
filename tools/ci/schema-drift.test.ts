@@ -17,6 +17,8 @@ import { spawnSync } from 'node:child_process';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { CONSENT_SCOPES } from '@drift/contract';
+
 const ASSERT_NO_DRIFT = fileURLToPath(
   new URL('../../packages/db/scripts/assert-no-drift.mjs', import.meta.url),
 );
@@ -146,6 +148,15 @@ describe('(d) COMPLY-09 的负向 fixture：绕过标识注入的写入必须失
       `;
       const [c] = await t<{ readonly id: string }[]>`select id from "character" limit 1`;
       if (u === undefined || c === undefined) throw new Error('fixture 前置数据缺失');
+      // 五条同意。**不能省**（Plan 09）：生产里每个 user 恰好有 5 行 consent，而
+      // consent-reconcile 的日对账断言的就是这条全库不变式。一个没有同意行的 fixture
+      // 用户会让那条对账在测试库里永远为假 —— 于是「残缺账号被检出」变成空真断言。
+      for (const scope of CONSENT_SCOPES) {
+        await t`
+          insert into consent (id, user_id, scope, granted, policy_version)
+          values (${`fx-consent-${code}-${scope}`}, ${u.id}, ${scope}, false, 'pv_fixture')
+        `;
+      }
       const [conv] = await t<{ readonly id: string }[]>`
         insert into conversation (id, user_id, character_id)
         values (${`fx-conv-${code}`}, ${u.id}, ${c.id})

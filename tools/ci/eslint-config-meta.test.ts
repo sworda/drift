@@ -125,4 +125,47 @@ describe('负向 lint fixture', () => {
     expect(hits.length).toBeGreaterThanOrEqual(1);
     expect(hits.some((m) => m.message.includes('ImportExpression'))).toBe(true);
   });
+
+  it('decrypt-contact-import.ts 报出 no-restricted-imports（Plan 09 / T-09-03）', async () => {
+    const result = await lintFixture('tools/ci/fixtures/decrypt-contact-import.ts');
+    const hits = result.messages.filter((m) => m.ruleId === 'no-restricted-imports');
+    expect(hits.length).toBeGreaterThanOrEqual(1);
+    expect(hits.some((m) => m.message.includes('maskContact'))).toBe(true);
+  });
+});
+
+describe('decryptContact 的目录级导入限制（Plan 09 / T-09-03）', () => {
+  /**
+   * 正向一半：豁免目录里**不**报错。
+   *
+   * 只断言 fixture 变红是不够的 —— 一条把所有人都拦住的规则同样能让那条断言通过，
+   * 而那会让危机流程（唯一的合法消费者）也写不出来。两侧都断言，边界才是一条边界
+   * 而不是一堵墙。
+   */
+  const ALLOWED = [
+    'apps/api/src/modules/safety/contact.ts',
+    'packages/db/src/crypto.ts',
+  ];
+
+  it.each(ALLOWED)('%s 的有效配置不含 decryptContact 禁令', async (file) => {
+    const eslint = new ESLint({ cwd: REPO_ROOT });
+    const config = (await eslint.calculateConfigForFile(join(REPO_ROOT, file))) as EffectiveConfig;
+    const value = config.rules?.['no-restricted-imports'];
+    const patterns = Array.isArray(value)
+      ? ((value[1] as { patterns?: { importNames?: string[] }[] } | undefined)?.patterns ?? [])
+      : [];
+    expect(patterns.some((p) => p.importNames?.includes('decryptContact'))).toBe(false);
+  });
+
+  it('apps/api 的普通模块仍然带着 decryptContact 禁令', async () => {
+    const eslint = new ESLint({ cwd: REPO_ROOT });
+    const config = (await eslint.calculateConfigForFile(
+      join(REPO_ROOT, 'apps/api/src/modules/auth/register.ts'),
+    )) as EffectiveConfig;
+    const value = config.rules?.['no-restricted-imports'];
+    const patterns = Array.isArray(value)
+      ? ((value[1] as { patterns?: { importNames?: string[] }[] } | undefined)?.patterns ?? [])
+      : [];
+    expect(patterns.some((p) => p.importNames?.includes('decryptContact'))).toBe(true);
+  });
 });

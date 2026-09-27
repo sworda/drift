@@ -32,7 +32,13 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { ContactAttemptStatus } from '@drift/safety';
-import { contactAttempt, emergencyContact, type Executor } from '@drift/db';
+import {
+  contactAttempt,
+  decryptContact,
+  emergencyContact,
+  type Executor,
+  maskContact,
+} from '@drift/db';
 
 import type { AcuteAlert, AlertDeliveryResult, AlertTransport } from './alert.ts';
 import { notifyOperator } from './alert.ts';
@@ -42,6 +48,9 @@ import type { ContactAttemptTimeoutScheduler } from '../../worker/jobs/contact-a
 export const UNAVAILABLE_REASONS = [
   'no_contact_record',
   'contact_ref_missing',
+  // 密文读不回来（密钥轮换出错、行被改坏）。与 contact_ref_missing 分开记：
+  // 「没存下来」与「存下来了但读不回来」的处置完全不同，混成一个会让运维查错方向。
+  'contact_ref_undecryptable',
   'alert_delivery_failed',
   'timeout_not_schedulable',
 ] as const;
@@ -51,7 +60,7 @@ export interface ContactAttemptResult {
   readonly id: string;
   readonly status: ContactAttemptStatus;
   readonly contactName: string | null;
-  /** 遮蔽后的联系方式。Phase 1 恒为 null —— 见 startContactAttempt 的说明。 */
+  /** 遮蔽后的联系方式（`138****1234`）。unavailable 态为 null。 */
   readonly maskedContact: string | null;
   readonly unavailableReason: UnavailableReason | null;
   readonly delivery: AlertDeliveryResult | null;
@@ -109,10 +118,12 @@ async function insertAttempt(executor: Executor, args: InsertArgs): Promise<void
 /**
  * 开始一次联络尝试。**只插入一行**，状态由判据决定。
  *
- * ⚠️ `maskedContact` 在 Phase 1 恒为 null：`emergency_contact.contact_ref_encrypted`
- * 是应用层加密后的引用，而解密实现（packages/db/src/crypto.ts）属 Plan 09。返回 null
- * 而不是返回加密串的前几位 —— 后者看起来像一个遮蔽后的号码，但它不是。渲染层必须
- * 容忍 null（UI-SPEC 的 pending / delivered 两条文案里有 {遮蔽后的联系方式} 占位）。
+ * ⚠️ `maskedContact` 只在 pending / delivered 两态非空：它由
+ * `maskContact(decryptContact(contact_ref_encrypted))` 得到（Plan 09 落地了
+ * packages/db/src/crypto.ts）。unavailable 态一律 null —— 那几条分支本来就不该出现
+ * 一个号码。**本模块是全仓唯一允许 import decryptContact 的目录**（eslint 目录级禁令），
+ * 因为危机流程是唯一需要把第三方号码显示给用户的地方，而显示的是遮蔽形态。
+ * 渲染层仍必须容忍 null（UI-SPEC 的 failed / unavailable 两条文案里没有该占位）。
  */
 export async function startContactAttempt(
   executor: Executor,
@@ -150,6 +161,21 @@ export async function startContactAttempt(
       contactRef: null,
       contactName: contact.name,
       reason: 'contact_ref_missing',
+      delivery: null,
+    });
+  }
+
+  // (2.5) 解密 + 遮蔽。读不回来就没有可用通道 —— 运营者也拨不了一串密文。
+  let maskedContact: string;
+  try {
+    maskedContact = maskContact(decryptContact(contact.contactRef));
+  } catch {
+    return finishUnavailable(executor, deps, {
+      id,
+      input,
+      contactRef: null,
+      contactName: contact.name,
+      reason: 'contact_ref_undecryptable',
       delivery: null,
     });
   }
@@ -207,7 +233,7 @@ export async function startContactAttempt(
     id,
     status: 'pending',
     contactName: contact.name,
-    maskedContact: null,
+    maskedContact,
     unavailableReason: null,
     delivery,
   };

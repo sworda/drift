@@ -1,27 +1,27 @@
-// 注册路由。
+// 注册路由（COMPLY-06 / COMPLY-07 / PRIV-01）。
 //
-// ── 与 PLAN 的偏离（Rule 2）────────────────────────────────────────────────────
-// 注册链路的完整形态（better-auth、紧急联系人加密、ConsentTicket、注册 UI、
-// 18 岁法定终态拒绝）属 **Plan 09**，better-auth 也还不在依赖里（T-04-SC：本 plan
-// 不新增未经核验的包）。但本 plan 的 tracer 验收第 (1)(2) 条要求「同一邀请码并发
-// 注册恰好一个成功」与「注册后 consent 恰好 5 行」—— 没有注册入口就无从断言。
-// 这里交付 tracer 需要的那一刀，形态与 Plan 09 对齐、由它替换其中建账号那一步。
+// ── 三件在这一层就定死的事 ─────────────────────────────────────────────────
 //
-// COMPLY-07 的 18 岁校验在这里是一条 400，**不是** UI 的法定终态拒绝页面
-// （那个页面与它的文案属 Plan 09）。服务端先有硬校验，UI 后补 —— 反过来会有一段
-// 时间「只要不走 UI 就能注册未成年账号」。
+//  1. **policy_version 不接受客户端传入。** 它是 privacy.md 的服务端内容哈希。
+//     一个由请求体带进来的版本号等于让用户自己声明「我同意的是哪一版」，而那正是
+//     这条留证要回答的问题 —— 可伪造的留证不是留证。（01-04 的前身是由调用方传的，
+//     那是当时没有政策正文的权宜；Plan 15 交付正文后这条口子必须闭上。）
+//
+//  2. **18 岁校验是服务端硬校验。** UI 侧的法定终态拒绝页（Plan 09 Task 3）是给人看的，
+//     这条 403 是给绕过 UI 的请求看的。两者缺一不可：只有 UI 就意味着「不走 UI 就能
+//     注册未成年账号」。
+//
+//  3. **响应体里没有明文联系方式。** 只回 maskedContact（138****1234）。
+//     tests/integration/register.test.ts 的 (e) 断言整个响应体不含 11 位连续数字。
 
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import {
-  CONSENT_SCOPES,
-  InviteCodeUnavailableError,
-  registerWithInvite,
-  RequiredConsentMissingError,
-} from '@drift/db';
+import { CONSENT_SCOPES, CONTACT_PHONE_PATTERN, EMERGENCY_CONTACT_KINDS } from '@drift/contract';
 
 import { logError, logEvent } from '../../obs/logger.ts';
+import { InviteCodeUnavailableError } from './invite.ts';
+import { ContactFormatError, registerWithInvite, RequiredConsentMissingError } from './register.ts';
 
 /** 18 周岁。用出生日期算，不用「是否成年」布尔值（后者会在生日那天变成错的）。 */
 const MIN_AGE_YEARS = 18;
@@ -34,7 +34,12 @@ const RegisterBody = z.object({
   birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: 'birthDate 需为 YYYY-MM-DD' }),
   /** 五项同意。缺项视为未授权 —— 不是默认同意。 */
   consents: z.partialRecord(z.enum(CONSENT_SCOPES), z.boolean()).default(() => ({})),
-  policyVersion: z.string().min(1).max(128),
+  /** 监护人或紧急联系人二选一，填一个即完整（COMPLY-06）。 */
+  emergencyContact: z.object({
+    kind: z.enum(EMERGENCY_CONTACT_KINDS),
+    name: z.string().min(1).max(64),
+    phone: z.string().regex(CONTACT_PHONE_PATTERN, { error: '需为 11 位手机号' }),
+  }),
 });
 
 export function isAdult(birthDate: string, now: Date = new Date()): boolean {
@@ -68,10 +73,18 @@ authRoutes.post('/auth/register', async (c) => {
       name: body.name,
       birthDate: body.birthDate,
       consents: body.consents,
-      policyVersion: body.policyVersion,
+      emergencyContact: body.emergencyContact,
     });
     logEvent('auth.registered', { userId: result.userId, route: '/auth/register', statusCode: 201 });
-    return c.json({ userId: result.userId, sessionToken: result.sessionToken }, 201);
+    return c.json(
+      {
+        userId: result.userId,
+        sessionToken: result.sessionToken,
+        policyVersion: result.policyVersion,
+        emergencyContact: { kind: body.emergencyContact.kind, maskedContact: result.maskedContact },
+      },
+      201,
+    );
   } catch (error) {
     if (error instanceof InviteCodeUnavailableError) {
       return c.json({ error: 'invite_code_unavailable' }, 409);
@@ -79,7 +92,10 @@ authRoutes.post('/auth/register', async (c) => {
     if (error instanceof RequiredConsentMissingError) {
       return c.json({ error: 'required_consent_missing' }, 400);
     }
-    // 唯一约束（同一邮箱重复注册）也走这里 —— 409 而不是 500。
+    if (error instanceof ContactFormatError) {
+      return c.json({ error: 'contact_format_invalid' }, 400);
+    }
+    // 唯一约束（同一邮箱重复注册）与 better-auth 自己的 APIError 都走这里 —— 409 而不是 500。
     logError('auth.register_failed', error, { route: '/auth/register' });
     return c.json({ error: 'register_failed' }, 409);
   }

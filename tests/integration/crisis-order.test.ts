@@ -15,6 +15,11 @@ process.env['PORT'] = '3001';
 process.env['WEB_ORIGIN'] ??= 'http://127.0.0.1:3000';
 process.env['WECOM_WEBHOOK_URL'] ??= 'https://example.invalid/hook';
 process.env['OPERATOR_API_TOKEN'] ??= 'crisis-order-test-operator-token-0123456789';
+// Plan 09 新增的两个必填变量（better-auth 签名密钥 + 紧急联系人加密密钥）。
+// 两者都没有默认值也没有回退分支，所以测试必须显式给值。
+process.env['BETTER_AUTH_SECRET'] ??= 'crisis-order-test-better-auth-secret-0123456789';
+process.env['CONTACT_ENCRYPTION_KEY'] ??=
+  '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
 process.env['LLM_PROVIDER_MODE'] = 'mock';
 process.env['LOG_LEVEL'] ??= 'warn';
 
@@ -29,6 +34,7 @@ const {
   contactAttempt,
   db,
   emergencyContact,
+  encryptContact,
   llmCall,
   ownerDb,
   ownerSql,
@@ -124,7 +130,7 @@ beforeAll(async () => {
     userId: alertSeeded.userId,
     kind: 'emergency',
     name: '联系人甲',
-    contactRefEncrypted: 'enc:13812341234',
+    contactRefEncrypted: encryptContact('13812341234'),
   });
   alertTracer = makeTracer();
   alertTriggerText = `我真的不想活了，${alertTracer}，今天就想结束自己的生命。`;

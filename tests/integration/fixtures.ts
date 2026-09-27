@@ -10,7 +10,14 @@ import { randomUUID } from 'node:crypto';
 
 import { asc } from 'drizzle-orm';
 
-import { character, conversation, inviteCode, ownerDb, user } from '@drift/db';
+import { CONSENT_SCOPES, REQUIRED_SCOPES } from '@drift/contract';
+import { character, consent, conversation, inviteCode, ownerDb, user } from '@drift/db';
+
+/**
+ * fixture 用户的政策版本。真实注册取 privacy.md 的内容哈希（apps/api 的 register.ts），
+ * 这里不去算它 —— 本 fixture 不经 HTTP，被测对象也不是 policy_version。
+ */
+const FIXTURE_POLICY_VERSION = 'pv_fixture';
 
 export interface SeededConversation {
   readonly userId: string;
@@ -49,6 +56,19 @@ export async function seedConversation(label: string): Promise<SeededConversatio
     birthDate: '1995-06-15',
     inviteCodeId: code,
   });
+  // 五条同意。**不能省**：生产里每个 user 恰好有 CONSENT_SCOPES.length 行 consent，
+  // 而 consent-reconcile 的日对账断言的就是这条全库不变式（T-09-02）。一个没有同意行
+  // 的 fixture 用户会让那条对账在测试库里永远为假 —— 于是「残缺账号被检出」这条断言
+  // 变成空真，而它正是这条对账存在的理由。
+  await ownerDb.insert(consent).values(
+    CONSENT_SCOPES.map((scope) => ({
+      userId,
+      scope,
+      granted: REQUIRED_SCOPES.includes(scope),
+      policyVersion: FIXTURE_POLICY_VERSION,
+    })),
+  );
+
   const conversationRows = await ownerDb
     .insert(conversation)
     .values({ userId, characterId })

@@ -30,6 +30,11 @@ process.env['WEB_ORIGIN'] ??= 'http://127.0.0.1:3000';
 process.env['WECOM_WEBHOOK_URL'] ??= 'https://example.invalid/hook';
 // Plan 07 新增的必填变量（运营者后台端点的共享密钥）。至少 32 字符。
 process.env['OPERATOR_API_TOKEN'] ??= 'tracer-test-operator-token-0123456789abcdef';
+// Plan 09 新增的两个必填变量。两者都**没有**默认值也**没有**回退分支，所以测试
+// 必须显式给值 —— 这正是它们该有的形状（见 apps/api/src/config/env.ts）。
+process.env['BETTER_AUTH_SECRET'] ??= 'tracer-test-better-auth-secret-0123456789ab';
+process.env['CONTACT_ENCRYPTION_KEY'] ??=
+  '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
 process.env['LLM_PROVIDER_MODE'] = 'mock';
 process.env['LOG_LEVEL'] ??= 'warn';
 
@@ -51,7 +56,12 @@ const {
 const { safetyGateway } = await import('@drift/safety');
 const { PROMPTS } = await import('@drift/prompts');
 
-const POLICY_VERSION = 'sha256:tracer-policy';
+/**
+ * ⚠️ policy_version **不再由请求体传入**（Plan 09）：它是 privacy.md 的服务端内容
+ * 哈希。一个由客户端声明的「我同意的是哪一版」是可伪造的留证，而那正是这条列要
+ * 回答的问题。
+ */
+const CONTACT_PHONE = '13800001234';
 
 let baseUrl: string;
 let wsUrl: string;
@@ -81,7 +91,7 @@ async function register(code: string, suffix: string): Promise<Response> {
       name: `tracer-${suffix}`,
       birthDate: '1995-06-15',
       consents: { basic_service: true, sensitive_pi: true },
-      policyVersion: POLICY_VERSION,
+      emergencyContact: { kind: 'emergency', name: '联系人', phone: CONTACT_PHONE },
     }),
   });
 }
@@ -489,7 +499,7 @@ describe('tracer —— 一条真实消息打穿全链路', () => {
         name: 'minor',
         birthDate: new Date(Date.now() - 10 * 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
         consents: { basic_service: true, sensitive_pi: true },
-        policyVersion: POLICY_VERSION,
+        emergencyContact: { kind: 'guardian', name: '监护人', phone: CONTACT_PHONE },
       }),
     });
     expect(response.status).toBe(403);

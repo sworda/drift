@@ -62,6 +62,10 @@ export const LOG_ALLOWED_FIELDS = [
   'wsConnectionId',
   // 通用计量与生命周期
   'count',
+  // 对账类作业的「应有 / 实际」一对整数（consent-reconcile）。两者都是聚合计数，
+  // 不可反推任何个人；而把它们塞进单个 count 会让告警说不清哪个是哪个。
+  'expectedCount',
+  'actualCount',
   'durationMs',
   'phase',
   'signal',

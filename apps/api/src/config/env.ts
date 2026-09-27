@@ -36,6 +36,26 @@ const EnvSchema = z.object({
   OPERATOR_API_TOKEN: z
     .string()
     .min(32, { error: 'OPERATOR_API_TOKEN 至少 32 个字符（运营者端点的共享密钥）' }),
+  /**
+   * better-auth 的签名密钥（D-22）。
+   *
+   * 必填、无默认值。better-auth 在缺省时会自行生成一个进程内密钥并只打一条 warning ——
+   * 那意味着每次重启后全部已签发的会话静默失效，而现象是「用户莫名其妙被登出」，
+   * 不是一条错误。宁可起不来。
+   */
+  BETTER_AUTH_SECRET: z
+    .string()
+    .min(32, { error: 'BETTER_AUTH_SECRET 至少 32 个字符（better-auth 的签名密钥）' }),
+  /**
+   * 紧急联系人联系方式的 AES-256-GCM 密钥，64 个十六进制字符（T-09-08）。
+   *
+   * 必填、无默认值、**不提供明文回退**。联系方式是**第三方**的个人信息，用户本人
+   * 并未代其同意展示。一个「密钥没配就先存明文」的分支会让生产库里躺着一批明文
+   * 号码，而读路径对两种形态都能工作，所以没有任何检查会发现它。
+   */
+  CONTACT_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, {
+    error: 'CONTACT_ENCRYPTION_KEY 必须是 64 个十六进制字符（32 字节 AES-256 密钥）',
+  }),
   /** mock = 不出网的假 provider（D-27）；live = 真实调用。默认 mock。 */
   LLM_PROVIDER_MODE: z.enum(['mock', 'live']).default('mock'),
 });

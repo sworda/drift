@@ -8,6 +8,7 @@
 
 export * from './schema/index.ts';
 export * from './client.ts';
+export * from './crypto.ts';
 export * from './message.ts';
 export * from './onboarding.ts';
 export * from './seed/characters.ts';

@@ -14,6 +14,7 @@
     "@drift/prompts": "workspace:*",
     "@drift/safety": "workspace:*",
     "@hono/node-server": "2.1.1",
+    "better-auth": "1.7.6",
     "drizzle-orm": "0.45.3",
     "hono": "4.13.9",
     "pg-boss": "12.34.0",

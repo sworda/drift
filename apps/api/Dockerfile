@@ -28,6 +28,12 @@ RUN pnpm install --frozen-lockfile --filter @drift/api...
 COPY tsconfig.base.json ./
 COPY packages/ packages/
 COPY apps/api/ apps/api/
+# 隐私政策与服务条款正文。**运行时必需**：consent_event.policy_version 是
+# apps/web/content/legal/privacy.md 的内容哈希，而 apps/api/src/modules/auth/register.ts
+# 在模块加载期就读它（缺失即抛错、进程起不来 —— 那是刻意的 fail-loud，因为一个伪造的
+# policy_version 会让每条同意留证指向一份不存在的政策文本）。只拷 content/，不拷整个
+# apps/web：前端构建产物与 node_modules 与本镜像无关。
+COPY apps/web/content/ apps/web/content/
 
 # 导出文件目录（PRIV-04）。7 天 TTL 清理在 Plan 11 Task 3 作用于这个目录。
 RUN mkdir -p /var/lib/drift/exports && chown -R node:node /var/lib/drift

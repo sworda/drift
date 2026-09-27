@@ -71,13 +71,30 @@ const WS_IMPORT_PATTERN = {
 };
 
 /**
- * 两条导入边界的作用域不同（packages/llm 豁免 provider，apps/api/src/ws 豁免 ws），
+ * `decryptContact` 的唯一合法消费者是 apps/api/src/modules/safety/**（危机流程要把
+ * 紧急联系人的号码遮蔽后显示给用户）。别处需要的是 `maskContact`，不是明文。
+ *
+ * 联系方式是**第三方**的个人信息 —— 用户代监护人 / 紧急联系人填了号码，而那个人并没有
+ * 同意我们展示它。把这条边界写进 lint 而不是写进注释，是因为注释不会变红。
+ * 所有者 packages/db（实现与它自己的单元测试）另行豁免。
+ */
+const DECRYPT_CONTACT_IMPORT_PATTERN = {
+  group: ['@drift/db'],
+  importNames: ['decryptContact'],
+  message:
+    'decryptContact 只能在 apps/api/src/modules/safety/** 使用 —— 紧急联系人的号码是第三方的个人信息，别处要的是 maskContact（Plan 09 / T-09-03）。',
+};
+
+/**
+ * 三条导入边界的作用域不同（packages/llm 豁免 provider，apps/api/src/ws 豁免 ws，
+ * apps/api/src/modules/safety 与 packages/db 豁免 decryptContact），
  * 而 flat config 对同一规则是**替换而非合并** —— 因此必须从这里组装，不能靠叠加。
  */
-function restrictedImports({ providers = true, ws = true } = {}) {
+function restrictedImports({ providers = true, ws = true, decrypt = true } = {}) {
   const patterns = [];
   if (providers) patterns.push(PROVIDER_IMPORT_PATTERN);
   if (ws) patterns.push(WS_IMPORT_PATTERN);
+  if (decrypt) patterns.push(DECRYPT_CONTACT_IMPORT_PATTERN);
   return patterns.length === 0 ? 'off' : ['error', { patterns }];
 }
 
@@ -160,6 +177,21 @@ export default [
     files: ['apps/api/src/ws/**/*.ts'],
     rules: {
       'no-restricted-imports': restrictedImports({ ws: false }),
+    },
+  },
+  {
+    // decryptContact 的唯一消费者：危机流程要把紧急联系人的号码遮蔽后显示。
+    // 只豁免这一条，其余边界照旧。
+    files: ['apps/api/src/modules/safety/**/*.ts'],
+    rules: {
+      'no-restricted-imports': restrictedImports({ decrypt: false }),
+    },
+  },
+  {
+    // decryptContact 的**所有者**。实现与它自己的单元测试都在这里。
+    files: ['packages/db/**/*.ts'],
+    rules: {
+      'no-restricted-imports': restrictedImports({ decrypt: false }),
     },
   },
   {

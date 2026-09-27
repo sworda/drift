@@ -57,6 +57,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       WECOM_WEBHOOK_URL: ${WECOM_WEBHOOK_URL:?WECOM_WEBHOOK_URL 必填（危机二级的会话外通知）}
       OPERATOR_API_TOKEN: ${OPERATOR_API_TOKEN:?OPERATOR_API_TOKEN 必填（运营者后台端点的共享密钥，至少 32 字符）}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET 必填（better-auth 签名密钥，至少 32 字符；缺省会让每次重启静默登出全部用户）}
+      CONTACT_ENCRYPTION_KEY: ${CONTACT_ENCRYPTION_KEY:?CONTACT_ENCRYPTION_KEY 必填（紧急联系人号码的 AES-256-GCM 密钥，64 个十六进制字符；无明文回退）}
       LLM_PROVIDER_MODE: ${LLM_PROVIDER_MODE:-mock}
     volumes:
       # 导出文件（PRIV-04）。命名卷而不是 bind mount —— Plan 11 Task 3 的 7 天

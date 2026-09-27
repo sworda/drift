@@ -24,7 +24,12 @@ import * as contract from './index.ts';
  * 允许出现在 @drift/contract 运行时出口的函数。
  * 新增一项的门槛：它不得返回（也不得能被用来构造）GatedText / SyntheticText。
  */
-const ALLOWED_RUNTIME_FUNCTIONS = ['isWsTopic'] as const;
+const ALLOWED_RUNTIME_FUNCTIONS = [
+  'isWsTopic',
+  // Plan 09：两者都返回 boolean，不返回也无法用来构造任何字符串。
+  'isRequiredScope',
+  'isValidContactPhone',
+] as const;
 
 describe('@drift/contract 的品牌类型在运行时不可构造', () => {
   it('brand.ts 在运行时完全是空的', () => {

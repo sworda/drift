@@ -25,6 +25,11 @@ process.env['PORT'] = '3001';
 process.env['WEB_ORIGIN'] ??= 'http://127.0.0.1:3000';
 process.env['WECOM_WEBHOOK_URL'] ??= 'https://example.invalid/hook';
 process.env['OPERATOR_API_TOKEN'] ??= 'contact-attempt-test-operator-token-0123456789';
+// Plan 09 新增的两个必填变量（better-auth 签名密钥 + 紧急联系人加密密钥）。
+// 两者都没有默认值也没有回退分支，所以测试必须显式给值。
+process.env['BETTER_AUTH_SECRET'] ??= 'contact-attempt-test-better-auth-secret-0123456789';
+process.env['CONTACT_ENCRYPTION_KEY'] ??=
+  '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
 process.env['LLM_PROVIDER_MODE'] = 'mock';
 process.env['LOG_LEVEL'] ??= 'warn';
 
@@ -53,7 +58,22 @@ const { CONTACT_ATTEMPT_STATUSES: SAFETY_CONTACT_ATTEMPT_STATUSES } = await impo
 const { createApp } = await import('../../apps/api/src/http/app.ts');
 const { seedConversation } = await import('./fixtures.ts');
 
+const { encryptContact } = await import('@drift/db');
+
 const OPERATOR_TOKEN = process.env['OPERATOR_API_TOKEN'] ?? '';
+
+/**
+ * 紧急联系人的号码与它的**真密文**（Plan 09）。
+ *
+ * ⚠️ 这里原先是一个不可解密的假串。Plan 09 落地 crypto 之后
+ * startContactAttempt 会真的解密它来算遮蔽形态，于是一个解不开的假串会让每条用例都退到
+ * `contact_ref_undecryptable` ⇒ unavailable —— 四态又只剩两态，正是本文件要防的那件事。
+ * 密文**只算一次**：encryptContact 每次用新 IV，算两次会得到两个不同的串。
+ */
+const CONTACT_PLAIN = '13812341234';
+const CONTACT_CIPHER = encryptContact(CONTACT_PLAIN);
+/** 遮蔽形态（UI-SPEC〔法定〕的 {遮蔽后的联系方式}）。 */
+const CONTACT_MASKED = '138****1234';
 
 /** 触发二级危机的用户消息（命中入站规则层的 suicidal_intent 规则）。 */
 const CRISIS_TEXT = '我真的不想活了，今天就想结束自己的生命。';
@@ -181,13 +201,19 @@ describe('取值域：@drift/safety 与 @drift/db 的四态常量必须是同一
 
 describe('(a) webhook 200 且业务码成功 ⇒ pending', () => {
   it('status 为 pending、alert_sent_at 非空、卡片联络状态行与库里一致', async () => {
-    const { seeded, reply } = await runCrisisTurn('contact-a', okWebhook(), 'enc:13812341234');
+    const { seeded, reply } = await runCrisisTurn('contact-a', okWebhook(), CONTACT_CIPHER);
     const row = await readAttempt(seeded.userId);
     expect(row?.status).toBe('pending');
     expect(row?.alertSentAt, 'pending 必须有 alert_sent_at —— 否则是在等一件从未开始的事').not.toBeNull();
-    expect(row?.contactRef).toBe('enc:13812341234');
+    expect(row?.contactRef).toBe(CONTACT_CIPHER);
+    // 库里存的是密文，不是明文 —— 第三方的个人信息不明文入库（T-09-03）。
+    expect(row?.contactRef).not.toContain(CONTACT_PLAIN);
     if (reply.outcome !== 'escalated') return;
     expect(reply.contact?.status).toBe('pending');
+    // Plan 09：pending 态的联络状态行含**遮蔽后**的联系方式，而不是 null，也不是明文。
+    // 这条断言是 SKIPPED_CHECKS 里 masked-contact-until-crypto 的解除条件。
+    expect(reply.contact?.maskedContact).toBe(CONTACT_MASKED);
+    expect(reply.contact?.maskedContact).not.toContain(CONTACT_PLAIN);
     if (reply.careCard.level !== 'level2') throw new Error('crisis 必须是二级卡片');
     expect(reply.careCard.contactStatus).toBe('pending');
     // T-07-03：pending 不得陈述「已经联系了」。
@@ -196,7 +222,7 @@ describe('(a) webhook 200 且业务码成功 ⇒ pending', () => {
   });
 
   it('pending 的超时作业真的被排上了（pending 必须有界）', async () => {
-    const { seeded } = await runCrisisTurn('contact-a2', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-a2', okWebhook(), CONTACT_CIPHER);
     const row = await readAttempt(seeded.userId);
     expect(row?.status).toBe('pending');
     const jobs = await boss.findJobs<{ attemptId: string }>('contact-attempt-timeout', {
@@ -217,7 +243,7 @@ describe('(b) webhook 投递失败 ⇒ 直接 unavailable，不经 pending', () 
     ['HTTP 500', failingWebhook(500)],
     ['HTTP 200 但业务码非 0', businessErrorWebhook()],
   ])('%s ⇒ unavailable 且 alert_sent_at 为空（未经 pending 的判据）', async (_label, fetchImpl) => {
-    const { seeded, reply } = await runCrisisTurn('contact-b', fetchImpl, 'enc:13812341234');
+    const { seeded, reply } = await runCrisisTurn('contact-b', fetchImpl, CONTACT_CIPHER);
     const row = await readAttempt(seeded.userId);
     expect(row?.status).toBe('unavailable');
     // 本表允许 UPDATE，所以「有没有经过 pending」不能靠 status 的历史回答。
@@ -253,7 +279,7 @@ describe('(c) 无可用联络通道 ⇒ unavailable', () => {
   it('可达性 unconfirmed 本身**不**导致 unavailable（T-07-08 的正向证明）', async () => {
     // D-22：Phase 1 的可达性一律记为 unconfirmed。默认值就是它 —— 而这一条仍然进
     // pending。如果有人把「未确认」读成「永远 unavailable」，这条断言会红。
-    const { seeded } = await runCrisisTurn('contact-c3', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-c3', okWebhook(), CONTACT_CIPHER);
     const reachability = await ownerSql<{ readonly reachability: string }[]>`
       select reachability from emergency_contact where user_id = ${seeded.userId}
     `;
@@ -264,7 +290,7 @@ describe('(c) 无可用联络通道 ⇒ unavailable', () => {
 
 describe('(d)(e) 服务端超时：条件更新，幂等', () => {
   it('pending ⇒ 触发超时作业后为 failed；再触发一次影响 0 行且不报错', async () => {
-    const { seeded } = await runCrisisTurn('contact-d', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-d', okWebhook(), CONTACT_CIPHER);
     const row = await readAttempt(seeded.userId);
     expect(row?.status).toBe('pending');
     const attemptId = row?.id ?? '';
@@ -285,7 +311,7 @@ describe('(d)(e) 服务端超时：条件更新，幂等', () => {
     // **pg-boss 到期后会取件并把作业体跑起来** —— 队列策略、startAfter 与 worker
     // 取件之间的交互只有真跑一次才能证明。这里用 startAfter: 0 跑同一条链路：
     // 被证明的是接线，延迟值本身由 pgboss-delay-api 的窗口断言负责。
-    const { seeded } = await runCrisisTurn('contact-e2e', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-e2e', okWebhook(), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     expect((await readAttempt(seeded.userId))?.status).toBe('pending');
 
@@ -308,7 +334,7 @@ describe('(d)(e) 服务端超时：条件更新，幂等', () => {
   }, 60_000);
 
   it('超时作业不会把一个已经 delivered 的行改回 failed', async () => {
-    const { seeded } = await runCrisisTurn('contact-d2', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-d2', okWebhook(), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     expect(await ackDelivered(db, { attemptId, operatorId: 'op-1', note: '已与联系人甲通话' })).toBe(true);
     expect(await expireContactAttempt(db, attemptId)).toBe(0);
@@ -318,7 +344,7 @@ describe('(d)(e) 服务端超时：条件更新，幂等', () => {
 
 describe('delivered / failed 两态只能由人工推进（D-10）', () => {
   it('ackDelivered 非空 note ⇒ delivered，且 delivered_at 非空', async () => {
-    const { seeded } = await runCrisisTurn('contact-ack', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-ack', okWebhook(), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     expect(await ackDelivered(db, { attemptId, operatorId: 'op-1', note: '已与联系人甲通话' })).toBe(true);
     const row = await readAttempt(seeded.userId);
@@ -328,7 +354,7 @@ describe('delivered / failed 两态只能由人工推进（D-10）', () => {
   });
 
   it('(f) ackDelivered 传空 note ⇒ 抛错（note 就是那次真人确认的记录）', async () => {
-    const { seeded } = await runCrisisTurn('contact-f', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-f', okWebhook(), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     await expect(
       ackDelivered(db, { attemptId, operatorId: 'op-1', note: '   ' }),
@@ -338,7 +364,7 @@ describe('delivered / failed 两态只能由人工推进（D-10）', () => {
   });
 
   it('markFailed ⇒ failed；对非 pending 的行返回 false 而不是报错', async () => {
-    const { seeded } = await runCrisisTurn('contact-mf', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-mf', okWebhook(), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     expect(await markFailed(db, { attemptId, operatorId: 'op-2', note: '连续三次未接' })).toBe(true);
     expect((await readAttempt(seeded.userId))?.status).toBe('failed');
@@ -362,7 +388,7 @@ describe('四个取值逐个被覆盖过（防止四态静默退化成两态）'
 
 describe('数据库层的三条不变量（0003 迁移）', () => {
   it('delivered_at 非空而 status 不是 delivered ⇒ 被 CHECK 拒绝', async () => {
-    const { seeded } = await runCrisisTurn('contact-chk1', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-chk1', okWebhook(), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     await expect(
       ownerSql`update contact_attempt set delivered_at = now() where id = ${attemptId}`,
@@ -370,7 +396,7 @@ describe('数据库层的三条不变量（0003 迁移）', () => {
   });
 
   it('pending 而 alert_sent_at 为空 ⇒ 被 CHECK 拒绝', async () => {
-    const { seeded } = await runCrisisTurn('contact-chk2', failingWebhook(500), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-chk2', failingWebhook(500), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     // 这一行是 unavailable 且 alert_sent_at 为空。把它改成 pending 就构成「在等一件
     // 从未开始的事」，而 UI 会照样渲染「正在联系」。
@@ -378,14 +404,14 @@ describe('数据库层的三条不变量（0003 迁移）', () => {
     // 不补的话先撞上 contact_attempt_contact_ref_required，被测的那条约束就没被证明。
     await expect(
       ownerSql`
-        update contact_attempt set status = 'pending', contact_ref = 'enc:13812341234'
+        update contact_attempt set status = 'pending', contact_ref = ${CONTACT_CIPHER}
         where id = ${attemptId}
       `,
     ).rejects.toThrow(/contact_attempt_pending_requires_alert/u);
   });
 
   it('非 unavailable 而 contact_ref 为空 ⇒ 被 CHECK 拒绝', async () => {
-    const { seeded } = await runCrisisTurn('contact-chk3', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-chk3', okWebhook(), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     await expect(
       ownerSql`update contact_attempt set contact_ref = null where id = ${attemptId}`,
@@ -407,7 +433,7 @@ describe('T-07-05 运营者端点：与用户 session 分离的认证，且不�
   }
 
   it('无 token ⇒ 401；用户 session 的 Authorization 头**不能**当运营者用', async () => {
-    const { seeded } = await runCrisisTurn('contact-op-401', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-op-401', okWebhook(), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     expect(
       (await postOperator(`/internal/contact-attempts/${attemptId}/ack`, { operatorId: 'op', note: 'x' }, {}))
@@ -429,7 +455,7 @@ describe('T-07-05 运营者端点：与用户 session 分离的认证，且不�
   });
 
   it('带正确 x-operator-token ⇒ 推进 delivered；空 note 被拒为 400', async () => {
-    const { seeded } = await runCrisisTurn('contact-op-ok', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-op-ok', okWebhook(), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     const header = { 'x-operator-token': OPERATOR_TOKEN };
     // 空 note ⇒ zod 的 min(1) 直接 400（delivered 的判据是真人确认已通话）。
@@ -459,7 +485,7 @@ describe('T-07-05 运营者端点：与用户 session 分离的认证，且不�
   });
 
   it('/failed 端点同样要求运营者 token，且能把 pending 推成 failed', async () => {
-    const { seeded } = await runCrisisTurn('contact-op-failed', okWebhook(), 'enc:13812341234');
+    const { seeded } = await runCrisisTurn('contact-op-failed', okWebhook(), CONTACT_CIPHER);
     const attemptId = (await readAttempt(seeded.userId))?.id ?? '';
     expect(
       (await postOperator(`/internal/contact-attempts/${attemptId}/failed`, { operatorId: 'op' }, {})).status,

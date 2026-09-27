@@ -10,21 +10,19 @@
 
 import { boolean, check, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
+import { CONSENT_SCOPES, type ConsentScope } from '@drift/contract';
+
 import { inValues, newId } from '../sql-helpers.ts';
 import { user } from './auth.ts';
 
-/** PRIV-01 的五项。前两项必选（合同履行必要 + 个保法第二十九条单独同意）。 */
-export const CONSENT_SCOPES = [
-  'basic_service',
-  'sensitive_pi',
-  'research_l0',
-  'research_l1',
-  'persona_evolution',
-] as const;
-export type ConsentScope = (typeof CONSENT_SCOPES)[number];
-
-/** 必选项。撤回它们等同于停止服务并进入删除流程（PRIV-02，Q2 裁决）。 */
-export const REQUIRED_CONSENT_SCOPES = ['basic_service', 'sensitive_pi'] as const;
+/**
+ * PRIV-01 的五项。**定义在 @drift/contract**（连同界面文案与必选性），这里只再导出。
+ *
+ * 为什么不在这个文件里定义：注册页的五个 Checkbox、注册事务的逐项写入、以及下面
+ * 这条 CHECK 的取值域是同一份法定披露口径。写两份就是两份口径，而分叉的那一天不会
+ * 有任何检查变红（Plan 09）。
+ */
+export { CONSENT_SCOPES, type ConsentScope };
 
 export const consent = pgTable(
   'consent',

@@ -37,6 +37,10 @@ import { db } from '@drift/db';
 import { env } from '../config/env.ts';
 import { logError, logEvent } from '../obs/logger.ts';
 import {
+  CONSENT_RECONCILE_QUEUE,
+  registerConsentReconcile,
+} from './jobs/consent-reconcile.ts';
+import {
   CONTACT_ATTEMPT_TIMEOUT_QUEUE,
   registerContactAttemptTimeout,
   setContactAttemptTimeoutScheduler,
@@ -85,6 +89,24 @@ export async function startWorker(): Promise<WorkerHandle> {
         count: affected,
         contactAttemptStatus: affected > 0 ? 'failed' : 'pending',
       });
+    },
+  });
+
+  // 残缺账号的日对账（T-09-02）。与 publicness-reconcile 不同，它只需要数据库，
+  // 镜像里读得到自己需要的一切，因此可以真的挂上 schedule 而不是留给 nightly。
+  await registerConsentReconcile(boss, {
+    executor: db,
+    onReport: (report) => {
+      logEvent(
+        'consent.reconcile',
+        {
+          count: report.users,
+          expectedCount: report.expected,
+          actualCount: report.consents,
+          jobName: CONSENT_RECONCILE_QUEUE,
+        },
+        report.matches ? 'info' : 'error',
+      );
     },
   });
 
