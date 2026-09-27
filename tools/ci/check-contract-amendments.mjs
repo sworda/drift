@@ -101,11 +101,14 @@ export function checkAmendments(files) {
 
   // ---- A-02 PRIV-11 ----
   {
-    const ok = /^- \[ \] \*\*PRIV-11\*\*/m.test(requirements);
+    // 复选框状态必须两态都认（同 A-03 / SAFE-16 的 94ca966 与 c7d75f5）：PRIV-11 被
+    // requirements.mark-complete 标成 [x] 后，条目仍然在场，只是完成了 —— 只认未勾选态
+    // 会让本条在正常生命周期事件上恒红。这是同一类坑的第三次出现（A-03 → SAFE-16 → 此处）。
+    const ok = /^- \[[ xX]\] \*\*PRIV-11\*\*/m.test(requirements);
     push(
       'A02_PRIV11_IN_REQUIREMENTS',
       ok,
-      ok ? 'requirements 含 PRIV-11 条目' : 'requirements 缺「- [ ] **PRIV-11**:」条目（编号格式须与相邻条目一致）',
+      ok ? 'requirements 含 PRIV-11 条目' : 'requirements 缺「- [ ] **PRIV-11**:」条目（编号格式须与相邻条目一致，勾选/未勾选两态都算在场）',
     );
   }
   {
@@ -338,6 +341,21 @@ function runSelfTest() {
   });
   const cMissing = pick(rMissing, 'A03_FIVE_CONSENTS_REQUIREMENTS');
   if (!cMissing || cMissing.ok !== false) bail('FAIL self-test: 缺 scope 标识时 A03 未判失败');
+
+  // 7) 两态：PRIV-11 被标记完成（`- [x]`）后仍必须被找到 —— 同类坑的第三次出现
+  //（A-03 PRIV-01 → SAFE-16 → 此处；Plan 10 的 update_requirements 之后触发）。
+  //    反向：缺 PRIV-11 条目行时仍必须判失败，否则放宽成了「找不到就算了」。
+  const priv11Body = ': 隐私中心「我们收集了什么」须如实列明运营者通知披露\n';
+  for (const box of ['[ ]', '[x]']) {
+    const rBox = checkAmendments({ ...live, requirements: '- ' + box + ' **PRIV-11**' + priv11Body });
+    const cBox = pick(rBox, 'A02_PRIV11_IN_REQUIREMENTS');
+    if (!cBox || cBox.ok !== true) {
+      bail('FAIL self-test: PRIV-11 条目行在复选框状态 ' + box + ' 下未被识别（提取式只认单一状态）');
+    }
+  }
+  const rNoPriv11 = checkAmendments({ ...live, requirements: '- [x] **PRIV-01**: 别的条目\n' });
+  const cNoPriv11 = pick(rNoPriv11, 'A02_PRIV11_IN_REQUIREMENTS');
+  if (!cNoPriv11 || cNoPriv11.ok !== false) bail('FAIL self-test: 缺 PRIV-11 条目行时 A02 未判失败');
 
   console.log('self-test OK —— 负向输入被正确判失败的断言 id：');
   console.log('  uiSpec fixture     -> ' + mustFail.join(', ') + '（三条全部 ok:false）');
