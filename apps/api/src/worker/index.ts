@@ -55,6 +55,7 @@ import {
 import { registerExportBuild } from './jobs/export-build.ts';
 import { EXPORT_ARTIFACT_GC_QUEUE, registerExportArtifactGc } from './jobs/export-artifact-gc.ts';
 import { RETENTION_CLEANUP_QUEUE, registerRetentionCleanup } from './jobs/retention-cleanup.ts';
+import { registerUsageReminder } from './jobs/usage-reminder.ts';
 import { setExportBoss } from '../modules/privacy/export-boss.ts';
 
 /** pg-boss 的专属 schema。drizzle 的 schemaFilter 必须排除它。 */
@@ -164,6 +165,17 @@ export async function startWorker(): Promise<WorkerHandle> {
         },
         report.matches ? 'info' : 'error',
       );
+    },
+  });
+
+  // 连续使用 2 小时提醒的到点作业（COMPLY-03 / Plan 12）。注册顺序同样在 HTTP 之前：
+  // turn.ts 的 touch 通过进程级排定器入队，排定器在这里注册 —— 起服务时 worker
+  // 先于 HTTP，于是「消息链路想排作业而排定器还没注册」只在测试进程里出现，那里
+  // 的降级路径（warn + 跳过）是刻意的。
+  await registerUsageReminder(boss, {
+    executor: db,
+    onReminded: (segmentId, delivered) => {
+      logEvent('usage.reminder_fired', { segmentId, count: delivered });
     },
   });
 

@@ -3,6 +3,7 @@
 export type { GatedText, SyntheticText } from './brand.ts';
 export * from './consent.ts';
 export * from './disclosure.ts';
+export * from './exit.ts';
 export * from './emergency-contact.ts';
 export * from './ws.ts';
 export * from './topics.ts';

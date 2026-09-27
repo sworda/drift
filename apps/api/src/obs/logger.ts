@@ -55,6 +55,9 @@ export const LOG_ALLOWED_FIELDS = [
   // 任务队列
   'jobId',
   'jobName',
+  // usage_segment 的内部 id（COMPLY-03 计时排障必需）。与 conversationId 同判据：
+  // 不可反推自然人的内部主键；DATA_INVENTORY 里登记为 usage_segment.id。
+  'segmentId',
   // HTTP / WS
   'route',
   'method',

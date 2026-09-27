@@ -210,7 +210,11 @@ export default [
     // 显式 lint 它们。这里关掉 type-aware（fixture 不属于任何 tsconfig 的范围）。
     // ⚠️ crisis-settimeout.tsx 单独列出：**/*.ts 不匹配 .tsx，而通用 TS 块的
     // projectService 对不属于任何 tsconfig 的文件会直接 Parsing error。
-    files: ['tools/ci/fixtures/**/*.ts', 'tools/ci/fixtures/crisis-settimeout.tsx'],
+    files: [
+      'tools/ci/fixtures/**/*.ts',
+      'tools/ci/fixtures/crisis-settimeout.tsx',
+      'tools/ci/fixtures/chat-settimeout.tsx',
+    ],
     languageOptions: {
       parser: tsParser,
       parserOptions: { projectService: false, project: null },
@@ -288,5 +292,44 @@ export default [
       ],
     },
   },
-];
 
+  {
+    // 聊天目录的计时器禁令（COMPLY-03 / UI-SPEC ## 交互契约：计时权威在服务端，
+    // 前端不得 setTimeout/setInterval）。
+    //
+    // 连续使用计时的真相源是 usage_segment 表（按 user_id 归集，跨刷新与重登录
+    // 有效）；前端计时器刷新即清零，会让「连续使用满 2 小时」永远不触发，而界面
+    // 看不出任何异常 —— PITFALLS 点名的失效模式，与 crisis 目录同一条原则。
+    //
+    // ⚠️ 必须 spread REQUIRED_RESTRICTED_SYNTAX：flat config 对同一规则的 options
+    // 是替换而非合并，不 spread 就会静默删掉 model 字面量与 GatedText 断言两组禁令。
+    //
+    // ⚠️ 本块同时覆盖负向 fixture（tools/ci/fixtures/chat-settimeout.tsx），由
+    // tools/ci/chat-timer-ban.test.ts 以 ignore:false 显式 lint 并断言禁令报错。
+    // 必须位于 fixtures 块**之后**（同 crisis 块的理由）。
+    files: [
+      'apps/web/src/features/chat/**/*.ts',
+      'apps/web/src/features/chat/**/*.tsx',
+      'tools/ci/fixtures/chat-settimeout.tsx',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...REQUIRED_RESTRICTED_SYNTAX,
+        {
+          // 两种 callee 形态都要覆盖：裸 setTimeout(...) 与 window.setTimeout(...)。
+          selector:
+            "CallExpression[callee.name='setTimeout'], CallExpression[callee.property.name='setTimeout']",
+          message:
+            'chat 目录禁止前端计时器：连续使用的计时权威在服务端（usage_segment + pg-boss 到点作业）。前端计时器刷新即清零，会让「连续使用满 2 小时」永不触发而界面看不出异常（COMPLY-03）。',
+        },
+        {
+          selector:
+            "CallExpression[callee.name='setInterval'], CallExpression[callee.property.name='setInterval']",
+          message:
+            'chat 目录禁止前端轮询计时：提醒由服务端 usage.reminder / dependency.notice 下行事件驱动，不由界面自己数秒。',
+        },
+      ],
+    },
+  },
+];

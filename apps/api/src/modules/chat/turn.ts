@@ -75,6 +75,8 @@ import { logError, logEvent } from '../../obs/logger.ts';
 import { startContactAttempt } from '../safety/contact.ts';
 import { raiseRisk, readRiskLevel, writeSafetyEvent } from '../safety/state.ts';
 import { requireContactAttemptTimeoutScheduler } from '../../worker/jobs/contact-attempt-timeout.ts';
+import { getUsageReminderScheduler } from '../../worker/jobs/usage-reminder.ts';
+import { afterTouchUsage, touchUsageSegment } from '../usage/segment.ts';
 import { deliver, publish } from '../../ws/server.ts';
 
 /** 人格渲染带入的最近消息条数。Phase 1 不做检索（记忆系统在 Phase 3）。 */
@@ -176,8 +178,22 @@ export async function runTurn(
       .set({ lastMessageAt: userMessage.createdAt })
       .where(eq(conversation.id, found.id));
 
-    return { conversation: found, userMessage };
+    // 连续使用计时的入站 touch（COMPLY-03）：与用户消息落库同一事务。
+    const usage = await touchUsageSegment(t, input.userId, userMessage.createdAt);
+
+    return { conversation: found, userMessage, usage };
   });
+
+  // 计时副作用（WS 投递 + pg-boss 排定）在事务提交之后执行 —— 见 afterTouchUsage
+  // 的说明。排定器未注册（worker 未起）时记 warn 跳过，不挡消息链路。
+  {
+    const scheduler = getUsageReminderScheduler();
+    if (scheduler === null) {
+      logEvent('usage.reminder_unschedulable', { segmentId: prepared.usage.segmentId }, 'warn');
+    } else {
+      await afterTouchUsage(prepared.usage, input.userId, scheduler);
+    }
+  }
 
   // ── 2. 入站规则层（R1.20 第一层）—— 在生成之前，只升不降 ────────────────
   //
@@ -366,7 +382,7 @@ export async function runTurn(
     }
 
     // ── 7. 落库取 seq 并注入 disclosure，**然后**投递（CHAT-07）───────────
-    const characterMessage = await tx(async (t) => {
+    const characterTurn = await tx(async (t) => {
       // 角色消息同样进 message 表，同样要票 —— 用户在本轮期间撤回 sensitive_pi 时，
       // 这一步会抛错而不是把回复写进去（撤回后相应数据流**立即**停止，PRIV-02）。
       const ticket: ConsentTicket<'sensitive_pi'> = await requireConsent(
@@ -374,7 +390,7 @@ export async function runTurn(
         input.userId,
         'sensitive_pi',
       );
-      return insertCharacterMessage(t, {
+      const characterMessage = await insertCharacterMessage(t, {
         conversationId: prepared.conversation.id,
         text: gated.text,
         provenance: {
@@ -385,7 +401,19 @@ export async function runTurn(
         audience: 'user',
         ticket,
       });
+      // 出站 touch：与角色消息落库同一事务（入站/出站各一次，D-14）。
+      const usage = await touchUsageSegment(t, input.userId, characterMessage.createdAt);
+      return { characterMessage, usage };
     });
+    const { characterMessage } = characterTurn;
+    {
+      const scheduler = getUsageReminderScheduler();
+      if (scheduler === null) {
+        logEvent('usage.reminder_unschedulable', { segmentId: characterTurn.usage.segmentId }, 'warn');
+      } else {
+        await afterTouchUsage(characterTurn.usage, input.userId, scheduler);
+      }
+    }
     await db
       .update(conversation)
       .set({ lastMessageAt: characterMessage.createdAt })
