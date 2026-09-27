@@ -13,6 +13,7 @@
     "src"
   ],
   "dependencies": {
-    "@drift/contract": "workspace:*"
+    "@drift/contract": "workspace:*",
+    "@drift/prompts": "workspace:*"
   }
 }

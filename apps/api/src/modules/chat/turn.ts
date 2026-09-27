@@ -1,10 +1,13 @@
 // 一个 turn 的编排（D-24 / RESEARCH §12.2）。
 //
-//   用户消息 → 落库(seq) → typing.start → 人格渲染(chat.reply, **整段**)
-//     → safety.classify → safetyGateway() → GatedText
-//     → 落库(seq + disclosure，受 DB CHECK 保护) → WS 投递 → typing.stop
+//   用户消息 → 落库(seq) → 入站规则层 scanInbound + raiseRisk(只升不降)
+//     → typing.start → 人格渲染(chat.reply, **整段**)
+//     → safety.classify（决定性判定）→ safetyGateway()（确定性覆写）
+//     → gated: 落库(seq + disclosure，受 DB CHECK 保护) → WS 投递
+//     → escalated: 关怀卡片 + safety_event + session_risk_state（同一事务）
+//     → typing.stop
 //
-// ── 三条不可协商的顺序 ───────────────────────────────────────────────────────
+// ── 四条不可协商的顺序 ───────────────────────────────────────────────────────
 //
 //  1. **整段生成，不流式**（D-24）。流式与 CHAT-07 和出站网关在结构上不相容：
 //     chunk 没有 seq（重连补拉拿不到半条消息），且逐 token 流出绕过了网关。
@@ -17,6 +20,16 @@
 //        where r.purpose='chat.reply' and s.purpose='safety.classify'
 //          and s.created_at < r.created_at;   -- 必须 0 行
 //  3. **先落库取 seq，再投递**（CHAT-07）。投递失败不影响消息存在；DB 是真相源。
+//  4. **入站规则层在生成之前，且只能抬升**（R1.20 第一层）。它不具决定性 ——
+//     「不具决定性」的含义是不能用来降级，而不是可以被忽略：resolveRisk 取它与分类
+//     结果中较高的那一个（packages/safety/src/risk.ts）。
+//
+// ── 为什么这个文件里没有一个 catch（T-07-01）──────────────────────────────────
+// 「在 turn 外层包一个 try/catch，catch 里降级为直接下发人格回复」在功能上正确、在
+// 合规上是一条绕过网关的路径 —— 这正是成功标准 2 要求证明不存在的东西。两处设计让那个
+// catch 没有存在的理由：classifySafety **永不抛错**（三类失败全部收敛成 failed 分支），
+// 而 GatedResult 的 escalated / refused 三支**在类型层就没有可投递的候选回复**。
+// 下面唯一的 try 配的是 finally（typing.stop），不是 catch。
 //
 // ── llm_call 的事务边界（与 PLAN 的偏离，Rule 1）──────────────────────────────
 // PLAN 写的是「在同一事务里写 llm_call」。这里改成：**每次 provider 调用后立刻以
@@ -31,8 +44,16 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { call } from '@drift/llm';
-import { buildChatReplyPrompt, buildSafetyClassifyPrompt } from '@drift/prompts';
-import { parseClassification, safetyGateway } from '@drift/safety';
+import { buildChatReplyPrompt } from '@drift/prompts';
+import {
+  classifySafety,
+  maxRisk,
+  safetyGateway,
+  scanInbound,
+  type CareCard,
+  type ClassifyInvoke,
+  type RiskLevel,
+} from '@drift/safety';
 import {
   character,
   conversation,
@@ -41,12 +62,12 @@ import {
   insertUserMessage,
   message,
   personaVersion,
-  safetyEvent,
   tx,
   type MessageProvenance,
 } from '@drift/db';
 
 import { logEvent } from '../../obs/logger.ts';
+import { raiseRisk, readRiskLevel, writeSafetyEvent } from '../safety/state.ts';
 import { deliver, publish } from '../../ws/server.ts';
 
 /** 人格渲染带入的最近消息条数。Phase 1 不做检索（记忆系统在 Phase 3）。 */
@@ -64,15 +85,44 @@ export interface TurnResult {
   readonly userMessage: { readonly id: string; readonly seq: number };
   readonly reply:
     | { readonly outcome: 'gated'; readonly id: string; readonly seq: number; readonly delivered: number }
-    | { readonly outcome: 'escalated'; readonly level: 'elevated' | 'crisis' }
+    | {
+        readonly outcome: 'escalated';
+        readonly level: 'elevated' | 'crisis';
+        /**
+         * 确定性覆写的产物。**不是**一条角色消息 —— 它不落 message 表、不带
+         * ai_generated 标识、渲染层用 Alert 而不是 Bubble（R1.24：覆写内容不得伪装
+         * 成角色的自然发言）。四态联络状态行的渲染分支在 Plan 08。
+         */
+        readonly careCard: CareCard;
+        readonly safetyEventId: string;
+        readonly riskLevel: RiskLevel;
+      }
     | { readonly outcome: 'refused'; readonly reason: 'conversation_ended' | 'retention_phrase' };
 }
 
-export async function runTurn(input: {
-  readonly conversationId: string;
-  readonly userId: string;
-  readonly text: string;
-}): Promise<TurnResult> {
+/**
+ * 故障注入用的窄端口（tests/integration/fail-closed.test.ts）。
+ *
+ * ⚠️ 它能替换的只是 safety.classify 的**传输层**，返回值仍然要过 classifySafety 的
+ * schema 校验与置信度下限。因此注入能造成的最坏结果是 `classifierStatus: 'failed'`
+ * ⇒ fail-closed 到 elevated；它**造不出**「原样透传候选回复」这个形态 —— 那个形态在
+ * GatedResult 的类型里不存在。与 alert.ts 的 `fetchImpl` 是同一种注入点。
+ *
+ * 为什么用注入而不是「临时改一次源码再还原」：改文件的破坏验证只在执行者手里跑过
+ * 一次，注入式的用例每个 PR 都跑。
+ */
+export interface TurnOverrides {
+  readonly classifyInvoke?: ClassifyInvoke;
+}
+
+export async function runTurn(
+  input: {
+    readonly conversationId: string;
+    readonly userId: string;
+    readonly text: string;
+  },
+  overrides?: TurnOverrides,
+): Promise<TurnResult> {
   const turnId = randomUUID();
 
   // ── 1. 会话归属校验 + 用户消息落库（同一事务）────────────────────────────
@@ -110,7 +160,24 @@ export async function runTurn(input: {
     return { conversation: found, userMessage };
   });
 
-  // ── 2. 人格与历史（读，不需要在写事务里）────────────────────────────────
+  // ── 2. 入站规则层（R1.20 第一层）—— 在生成之前，只升不降 ────────────────
+  //
+  // ⚠️ 顺序：用户消息已落库，所以即便本轮被覆写，用户说过的话仍然在 DB 里（真相源）。
+  // scanInbound 是纯函数（正则 + 词典），命中只产出规则 id，不产出用户原文片段。
+  const inbound = scanInbound(input.text);
+  const previousLevel = await readRiskLevel(db, prepared.conversation.id);
+  if (inbound.suggestedLevel !== 'none') {
+    await raiseRisk(db, {
+      conversationId: prepared.conversation.id,
+      level: inbound.suggestedLevel,
+    });
+  }
+  // 供 safety.classify 的判定输入用（RESEARCH §4.1：判定对象是用户消息 + 候选回复 +
+  // **会话风险态**三者）。取较高者而不是重新读库：raiseRisk 只升不降，所以这两个值
+  // 的较高者就是抬升后的结果，少一次往返。
+  const sessionRiskLevel: RiskLevel = maxRisk(previousLevel, inbound.suggestedLevel);
+
+  // ── 3. 人格与历史（读，不需要在写事务里）────────────────────────────────
   const personaRows = await db
     .select({
       name: character.name,
@@ -141,7 +208,7 @@ export async function runTurn(input: {
   });
 
   try {
-    // ── 3. 人格渲染（chat.reply，整段）──────────────────────────────────────
+    // ── 4. 人格渲染（chat.reply，整段）──────────────────────────────────────
     const replyPrompt = buildChatReplyPrompt({
       persona: { name: persona.name, core: persona.core, dossier: persona.dossier },
       history: history.map((m) => ({ senderKind: m.senderKind, text: m.text })),
@@ -160,73 +227,115 @@ export async function runTurn(input: {
       db,
     );
 
-    // ── 4. 安全分类（**在人格渲染之后**）──────────────────────────────────
-    const classifyPrompt = buildSafetyClassifyPrompt({
-      userText: input.text,
-      candidateReply: candidate.text,
-      sessionRiskLevel: 'none',
-    });
-    const classified = await call(
-      { mode: 'routed', role: 'safety.classify' },
+    // ── 5. 安全分类（**在人格渲染之后**，决定性判定）────────────────────────
+    //
+    // classifySafety 永不抛错：provider 报错/超时、schema 校验失败、置信度低于下限
+    // 三类失败全部收敛成 `classifierStatus: 'failed'`，而 resolveRisk 对该分支恒返回
+    // elevated 并封顶在 elevated（SAFE-05：crisis 会让别人的手机响，分类器 bug 不该
+    // 导致一次针对第三方的个人信息使用）。所以这里不需要 try/catch。
+    const classifyInvoke: ClassifyInvoke =
+      overrides?.classifyInvoke ??
+      (async (prompt) => {
+        const result = await call(
+          { mode: 'routed', role: 'safety.classify' },
+          {
+            turnId,
+            prompt: prompt.text,
+            promptVersion: prompt.version,
+            userId: input.userId,
+            conversationId: prepared.conversation.id,
+            personaVersionId: null,
+          },
+          db,
+        );
+        return { text: result.text, modelSnapshot: result.modelSnapshot };
+      });
+
+    const classified = await classifySafety(
       {
-        turnId,
-        prompt: classifyPrompt.text,
-        promptVersion: classifyPrompt.version,
-        userId: input.userId,
-        conversationId: prepared.conversation.id,
-        personaVersionId: null,
+        userText: input.text,
+        candidateReply: candidate.text,
+        sessionRiskLevel,
       },
-      db,
+      { invoke: classifyInvoke },
     );
 
-    // ── 5. 出站安全网关 —— GatedText 的唯一来源 ───────────────────────────
-    // ⚠️ recordSafetyEvent 是必填的，不是可选项：挽留拦截必须同时留下一条证据，
-    // 而 packages/safety 不连数据库，所以写入动作由这里在自己的短事务里完成。
-    // 事务边界与 llm_call 同理（见文件头）：崩溃只可能留下「有审计行、没有消息」。
+    // ── 6. 出站安全网关 —— GatedText 与关怀卡片的唯一来源 ─────────────────
+    // ⚠️ recordSafetyEvent 是必填的，不是可选项，且必须返回落库行的 id：crisis 分支的
+    // contact_attempt 以 safety_event_id 为外键，而 safety_event 属 append-only 表族
+    // ——「先联络、事后补留证」这个顺序补不回来。
+    //
+    // safety_event 与 session_risk_state 的抬升在**同一个事务**里：两者是同一次判定的
+    // 两个面，分开写会留下「风险态升了但没有留证」或反之的半状态，而那种半状态在
+    // append-only 表上无法修复。
     const gated = await safetyGateway({
       candidateText: candidate.text,
-      classification: parseClassification(classified.text),
+      classification: classified.classification,
       conversationStatus: prepared.conversation.status,
-      recordSafetyEvent: async (draft) => {
-        await tx(async (t) => {
-          await t.insert(safetyEvent).values({
+      inboundSuggestedLevel: inbound.suggestedLevel,
+      inboundRuleHits: inbound.hits,
+      previousLevel,
+      classifierModelSnapshot: classified.modelSnapshot,
+      recordSafetyEvent: async (draft) =>
+        tx(async (t) => {
+          const safetyEventId = await writeSafetyEvent(t, draft, {
             userId: input.userId,
             conversationId: prepared.conversation.id,
             // 触发这次判定的那条用户消息。候选回复没有落库（它被拦下了），
             // 「当时判的是哪段文本」由 candidateReplyHash 回答。
             messageId: prepared.userMessage.id,
-            level: draft.level,
-            ruleHits: draft.ruleHits,
-            classifierStatus: draft.classifierStatus,
-            classifierModelSnapshot: classified.modelSnapshot,
-            candidateReplyHash: draft.candidateReplyHash,
-            candidateReplyLen: draft.candidateReplyLen,
-            overrideApplied: draft.overrideApplied,
           });
-        });
-      },
+          if (draft.level === 'elevated' || draft.level === 'crisis') {
+            await raiseRisk(t, {
+              conversationId: prepared.conversation.id,
+              level: draft.level,
+            });
+          }
+          return safetyEventId;
+        }),
     });
 
-    if (gated.outcome !== 'gated') {
-      // 不产出 GatedText ⇒ 两个出口在类型层都拿不到可投递的东西。
-      // 关怀卡片与硬退出提示的内容分别在 Plan 07 / Plan 12 填入；此刻**不回落到
-      // 直接下发人格回复** —— 那正是成功标准 2 要求证明不存在的那条路径。
-      logEvent('turn.gate_blocked', {
-        userId: input.userId,
-        conversationId: prepared.conversation.id,
-        riskLevel: gated.outcome === 'escalated' ? gated.level : 'none',
-      }, 'warn');
+    if (gated.outcome === 'escalated') {
+      // 该轮由关怀卡片接管，角色**不发**任何消息（UI-SPEC〔法定〕）。候选回复既不
+      // 落库也不投递 —— 此刻**不回落到直接下发人格回复**，那正是成功标准 2 要求
+      // 证明不存在的那条路径。硬退出提示的内容在 Plan 12。
+      logEvent(
+        'turn.escalated',
+        {
+          userId: input.userId,
+          conversationId: prepared.conversation.id,
+          riskLevel: gated.level,
+          modelSnapshot: classified.modelSnapshot,
+        },
+        'warn',
+      );
       return {
         turnId,
         userMessage: { id: prepared.userMessage.id, seq: prepared.userMessage.seq },
-        reply:
-          gated.outcome === 'escalated'
-            ? { outcome: 'escalated', level: gated.level }
-            : { outcome: 'refused', reason: gated.reason },
+        reply: {
+          outcome: 'escalated',
+          level: gated.level,
+          careCard: gated.careCard,
+          safetyEventId: gated.safetyEventId,
+          riskLevel: gated.level,
+        },
       };
     }
 
-    // ── 6. 落库取 seq 并注入 disclosure，**然后**投递（CHAT-07）───────────
+    if (gated.outcome !== 'gated') {
+      logEvent(
+        'turn.gate_blocked',
+        { userId: input.userId, conversationId: prepared.conversation.id, riskLevel: 'none' },
+        'warn',
+      );
+      return {
+        turnId,
+        userMessage: { id: prepared.userMessage.id, seq: prepared.userMessage.seq },
+        reply: { outcome: 'refused', reason: gated.reason },
+      };
+    }
+
+    // ── 7. 落库取 seq 并注入 disclosure，**然后**投递（CHAT-07）───────────
     const characterMessage = await tx(async (t) =>
       insertCharacterMessage(t, {
         conversationId: prepared.conversation.id,
@@ -262,7 +371,7 @@ export async function runTurn(input: {
       messageSeq: characterMessage.seq,
       modelSnapshot: candidate.modelSnapshot,
       provider: candidate.provider,
-      durationMs: candidate.latencyMs + classified.latencyMs,
+      durationMs: candidate.latencyMs,
       count: delivered,
     });
 

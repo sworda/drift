@@ -62,6 +62,14 @@ export const safetyEvent = pgTable(
       .references(() => conversation.id),
     /** 触发事件的那条消息。可空：入站规则层在角色消息落库之前就可能抬升风险态。 */
     messageId: text('message_id').references(() => message.id),
+    /**
+     * risk 轨迹的起点（R1.25「留存 risk_level 轨迹」）。
+     *
+     * ⚠️ 单独一列而不是塞进 rule_hits：只存终值的话，「这一轮是从哪一档跳上来的」
+     * 事后答不出来，而办法第二十三条的安全评估问的正是「用户极端情境的识别、应急
+     * 处置、干预管理情况」。default 'none' 让这一列可以后补到已有行上而不需要回填。
+     */
+    previousLevel: text('previous_level').$type<RiskLevel>().notNull().default('none'),
     level: text('level').$type<RiskLevel>().notNull(),
     ruleHits: jsonb('rule_hits').$type<readonly string[]>().notNull(),
     classifierStatus: text('classifier_status').$type<ClassifierStatus>().notNull(),
@@ -82,6 +90,7 @@ export const safetyEvent = pgTable(
     index('safety_event_user_id_idx').on(t.userId),
     index('safety_event_conversation_id_idx').on(t.conversationId),
     check('safety_event_level_allowed', inValues('level', RISK_LEVELS)),
+    check('safety_event_previous_level_allowed', inValues('previous_level', RISK_LEVELS)),
     check('safety_event_classifier_status_allowed', inValues('classifier_status', CLASSIFIER_STATUSES)),
   ],
 );

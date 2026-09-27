@@ -36,10 +36,17 @@ export const mockProvider: Provider = {
     const pick = Number.parseInt(hex.slice(0, 4), 16) % REPLY_TEMPLATES.length;
 
     // safety.classify 的输出必须是结构化的 —— 网关消费的是 level，不是自然语言。
-    // Phase 1 的 mock 恒返回 none；故障注入与危机判定的真实分类在 Plan 07/08。
+    // Phase 1 的 mock 恒返回 none；故障注入由 turn.ts 的 classifyInvoke 端口做，
+    // 真实危机判定在 Plan 08 的 L6 探针集。
+    //
+    // ⚠️ 三个字段一个都不能少：Plan 07 起 parseClassification 用
+    // @drift/prompts 的 SafetyClassifyOutput（zod）做校验，而 `categories` 在那份契约里
+    // 是**必填**。一个缺 categories 的 mock 回包会被判成 schema 失败 ⇒ fail-closed 到
+    // elevated —— 于是每一条集成测试都会看到关怀卡片而不是回复。mock 必须是一个
+    // **契约合规**的假 provider，否则它测的是一个不合规的模型。
     const text =
       request.purpose === 'safety.classify'
-        ? JSON.stringify({ level: 'none', confidence: 0.99 })
+        ? JSON.stringify({ level: 'none', confidence: 0.99, categories: ['none'] })
         : (REPLY_TEMPLATES[pick] ?? REPLY_TEMPLATES[0]);
 
     return {

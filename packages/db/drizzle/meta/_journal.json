@@ -15,6 +15,13 @@
       "when": 1790424211484,
       "tag": "0001_constraints_and_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790491715627,
+      "tag": "0002_safety_event_risk_trajectory",
+      "breakpoints": true
     }
   ]
 }

@@ -24,7 +24,7 @@ import {
   SAFETY_CLASSIFY_SYSTEM_VERSION,
 } from '../../packages/prompts/src/safety-classify.ts';
 import { normalizePromptText, promptVersion } from '../../packages/prompts/src/version.ts';
-import { RISK_LEVELS } from '../../packages/safety/src/gateway.ts';
+import { RISK_LEVELS } from '../../packages/safety/src/risk.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const PROMPTS_SRC = join(REPO_ROOT, 'packages', 'prompts', 'src');

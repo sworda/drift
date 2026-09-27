@@ -361,6 +361,9 @@ importers:
       '@drift/contract':
         specifier: workspace:*
         version: link:../contract
+      '@drift/prompts':
+        specifier: workspace:*
+        version: link:../prompts
 
 packages:
 
