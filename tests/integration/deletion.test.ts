@@ -343,11 +343,13 @@ describe('executeAccountDeletion 的执行细节', () => {
     expect(after.length, '审计行被删掉了 —— Q1 的口径是去标识化，不是删行').toBe(1);
     expect(after[0]?.userId).toBeNull();
     expect(after[0]?.scope).toBe('research_l0'); // 事件形状保留。
-    // 去标识化把 privacy_action.payload 里的 userId 键也移走了。
+    // 去标识化把 privacy_action.payload 里的 userId 键也移走了（全套跑时库里会有
+    // 其他用例留下的同形态行 —— 按「该用户还有没有」断言，不按全库绝对值）。
     const actions = await sql.unsafe(
-      `select count(*)::int as n from privacy_action where kind = 'revoke' and payload->>'userId' is null`,
+      `select count(*)::int as n from privacy_action where payload->>'userId' = $1 and kind = 'revoke'`,
+      [seeded.userId],
     );
-    expect((actions[0] as unknown as { n: number }).n).toBe(1);
+    expect((actions[0] as unknown as { n: number }).n, '该用户的 revoke 行 payload 还带着 userId —— 去标识化没移走它').toBe(0);
   });
 
   it('app_role 对审计表的 UPDATE 抛 42501 —— deidentifyAuditRows 只能用 purgeDb 的证明', async () => {
