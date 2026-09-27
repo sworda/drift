@@ -7,6 +7,7 @@
 // 只需要 schema 类型的地方请直接 import `@drift/db` 的 schema 子路径对应文件。
 
 export * from './schema/index.ts';
+export * from './inventory.ts';
 export * from './client.ts';
 export * from './consent-ticket.ts';
 export * from './crypto.ts';
