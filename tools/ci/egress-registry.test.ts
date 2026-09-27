@@ -13,7 +13,7 @@
 // 没有这两条，一个恒返回空集的扫描器会让这条断言永远绿。
 
 import { spawnSync } from 'node:child_process';
-import { globSync } from 'node:fs';
+import { globSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,6 +22,9 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import { EGRESS_POINTS, TEXT_CARRYING_EGRESS_POINTS } from '@drift/safety';
+
+// 哈希算法只有一份实现：这里 import 它，fast.yml 跑它的 CLI，人工更新登记也跑它。
+import { checkEgressHash, HASH_MISMATCH_MESSAGE } from './egress-hash.mjs';
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -322,5 +325,76 @@ describe('三层防线之一：as GatedText 只允许出现在唯一产出点', 
       });
     expect(hits.length, `命中行：\n${hits.join('\\n')}`).toBe(1);
     expect(hits[0]).toContain('packages/safety/src/gateway.ts');
+  });
+});
+
+describe('绑定断言 2：COMPLY-11 登记与出口集合的 egress_hash 绑定（D-21）', () => {
+  const script = path.join(REPO_ROOT, 'tools/ci/egress-hash.mjs');
+
+  it('--print 输出单行 sha256', () => {
+    const run = spawnSync(process.execPath, [script, '--print'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    });
+    expect(run.status, run.stderr).toBe(0);
+    const lines = (run.stdout ?? '').split('\n').filter((line) => line.length > 0);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^sha256:[0-9a-f]{64}$/u);
+  }, 60_000);
+
+  it('--check 与登记文件一致（出口集合没变 ⇒ 不要求重新复核）', () => {
+    const run = spawnSync(process.execPath, [script, '--check'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    });
+    expect(
+      run.status,
+      `egress_hash 与 EGRESS_POINTS 不一致：\n${run.stdout}${run.stderr}`,
+    ).toBe(0);
+  }, 60_000);
+
+  it('给注册表加一项而不改 egress_hash ⇒ 变红，且错误信息含「未重新复核」', () => {
+    // 破坏验证写成注入而不是临时改文件：checkEgressHash 接受 points，于是「出口集合
+    // 变了而登记没被重读会红」这件事每个 PR 都在跑。
+    const mutated = [
+      ...EGRESS_POINTS,
+      { id: 'zz.newEgress', module: 'apps/api/src/modules/zz/new.ts', fn: 'sendZz' },
+    ];
+    const result = checkEgressHash({ points: mutated });
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('未重新复核');
+    expect(result.message).toContain('compliance/no-unlabeled-output.md');
+    expect(HASH_MISMATCH_MESSAGE).toContain('egress-hash.mjs --print');
+  });
+
+  it('--check 传一个错的期望值 ⇒ 非零退出并打印复核指引', () => {
+    const run = spawnSync(process.execPath, [script, '--check', 'sha256:deadbeef'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    });
+    expect(run.status).not.toBe(0);
+    expect(`${run.stdout}${run.stderr}`).toContain('未重新复核');
+  }, 60_000);
+
+  it('哈希脚本不得自动改写登记文件（自动更新会绕过人工复核动作）', () => {
+    const source = readFileSync(script, 'utf8');
+    for (const forbidden of ['writeFile', 'writeFileSync', 'appendFile', 'createWriteStream']) {
+      expect(source, `egress-hash.mjs 出现了 ${forbidden} —— COMPLY-11 的人工复核动作被绕过`).not.toContain(
+        forbidden,
+      );
+    }
+  });
+
+  it('登记文件的 front-matter 三个键齐全，正文含空集结论与第九条引注', () => {
+    const doc = readFileSync(path.join(REPO_ROOT, 'compliance/no-unlabeled-output.md'), 'utf8');
+    for (const key of ['egress_hash:', 'reviewed_at:', 'reviewed_by:']) {
+      expect(doc).toContain(key);
+    }
+    expect(doc).toContain('空集');
+    expect(doc).toContain('第九条');
+    // 四条对外提供路径逐条覆盖 —— 少一条就说明有一个出口没被复核过。
+    for (const point of EGRESS_POINTS) {
+      expect(doc, `登记文件没有逐条覆盖出口 ${point.id}`).toContain(point.id);
+    }
   });
 });

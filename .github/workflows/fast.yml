@@ -49,6 +49,14 @@ jobs:
       - name: 契约修订断言（Plan 01 的 13 条）
         run: node tools/ci/check-contract-amendments.mjs
 
+      - name: COMPLY-11 登记与出口集合绑定（egress_hash）
+        # 出口集合变了而 compliance/no-unlabeled-output.md 没被重新复核 → 非零退出。
+        # 这是本仓库唯一一处 egress 哈希比对的**实现**：上一步的 ci:fast 里
+        # tools/ci/egress-registry.test.ts 用 spawn 驱动的就是这同一个 CLI，所以两处
+        # 不会分叉。**不得**在此加任何自动更新 egress_hash 的步骤 —— 自动更新会绕过
+        # 「出口变了就要重新确认无未标识输出」这个人工复核动作。
+        run: node tools/ci/egress-hash.mjs --check
+
       - name: lockfile 与 workspace 未被安装过程改动
         # pnpm 12 会自行往 pnpm-workspace.yaml 写 allowBuilds / minimumReleaseAgeExclude。
         # 那种自动改动如果被默许，「装的东西与 lockfile 一致」这条就不再成立，
