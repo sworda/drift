@@ -48,6 +48,7 @@ const {
   friendship,
   insertCharacterMessage,
   insertUserMessage,
+  requireConsent,
   llmCall,
   message,
   ownerSql,
@@ -426,25 +427,45 @@ describe('tracer —— 一条真实消息打穿全链路', () => {
     const socket = await openSocket(backfillConversationId);
 
     await tx(async (t) => {
-      await insertUserMessage(t, { conversationId: backfillConversationId, text: '1', provenance });
+      // Plan 09：消息落库要一张 sensitive_pi 的同意票（RESEARCH §6.3）。
+      const ticket = await requireConsent(t, user.userId, 'sensitive_pi');
+      await insertUserMessage(t, {
+        conversationId: backfillConversationId,
+        text: '1',
+        provenance,
+        ticket,
+      });
       await insertCharacterMessage(t, {
         conversationId: backfillConversationId,
         text: gated.text,
         provenance,
+        ticket,
       });
-      await insertUserMessage(t, { conversationId: backfillConversationId, text: '3', provenance });
+      await insertUserMessage(t, {
+        conversationId: backfillConversationId,
+        text: '3',
+        provenance,
+        ticket,
+      });
     });
 
     socket.close();
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     await tx(async (t) => {
+      const ticket = await requireConsent(t, user.userId, 'sensitive_pi');
       await insertCharacterMessage(t, {
         conversationId: backfillConversationId,
         text: gated.text,
         provenance,
+        ticket,
       });
-      await insertUserMessage(t, { conversationId: backfillConversationId, text: '5', provenance });
+      await insertUserMessage(t, {
+        conversationId: backfillConversationId,
+        text: '5',
+        provenance,
+        ticket,
+      });
     });
 
     const backfill = await fetch(

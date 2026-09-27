@@ -26,9 +26,11 @@ import * as contract from './index.ts';
  */
 const ALLOWED_RUNTIME_FUNCTIONS = [
   'isWsTopic',
-  // Plan 09：两者都返回 boolean，不返回也无法用来构造任何字符串。
+  // Plan 09：前两个返回 boolean，第三个返回一段界面文案 —— 三者都不返回也无法
+  // 用来构造任何品牌类型（GatedText 的唯一产出点在 packages/safety）。
   'isRequiredScope',
   'isValidContactPhone',
+  'revokeConfirmationCopy',
 ] as const;
 
 describe('@drift/contract 的品牌类型在运行时不可构造', () => {

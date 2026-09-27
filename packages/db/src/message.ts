@@ -20,6 +20,7 @@ import {
 } from '@drift/contract';
 
 import type { Executor, Tx } from './client.ts';
+import type { ConsentTicket } from './consent-ticket.ts';
 import { conversation } from './schema/conversation.ts';
 import { message, type MessageAudience, type MessageProvenance } from './schema/message.ts';
 
@@ -52,12 +53,23 @@ async function nextSeq(tx: Tx, conversationId: string): Promise<number> {
   return row.nextSeq - 1;
 }
 
+/**
+ * 用户消息落库。
+ *
+ * ⚠️ `ticket` 不是可选的，也不是装饰：**消息落库本身就是敏感个人信息处理**
+ * （RESEARCH §6.3）。票只能由 requireConsent() 在查过 consent 表之后发出，于是
+ * 「sensitive_pi 被撤回之后仍然往库里写消息」在编译期就写不出来 —— 而不是靠每个
+ * 写入点各自记得去查一次。Phase 1 只有这一个 scope 有真实数据流，因此也**只有**
+ * 这一个 scope 有消费方（给另外三个造消费点会造出无数据流的假消费，
+ * 让 Plan 10 的「尚未开始收集」态失去意义）。
+ */
 export async function insertUserMessage(
   tx: Tx,
   input: {
     readonly conversationId: string;
     readonly text: string;
     readonly provenance: MessageProvenance;
+    readonly ticket: ConsentTicket<'sensitive_pi'>;
   },
 ): Promise<InsertedMessage> {
   const seq = await nextSeq(tx, input.conversationId);
@@ -87,6 +99,8 @@ export interface InsertedCharacterMessage extends InsertedMessage {
  * 角色消息落库。**出口签名只接受 GatedText。**
  *
  * @param input.text 已通过 packages/safety 的 safetyGateway() 的文本。
+ * @param input.ticket sensitive_pi 的同意票据 —— 理由同 insertUserMessage。
+ *   角色消息同样进 message 表，同样是这个用户的敏感个人信息处理。
  */
 export async function insertCharacterMessage(
   tx: Tx,
@@ -95,6 +109,7 @@ export async function insertCharacterMessage(
     readonly text: GatedText;
     readonly provenance: MessageProvenance;
     readonly audience?: MessageAudience;
+    readonly ticket: ConsentTicket<'sensitive_pi'>;
   },
 ): Promise<InsertedCharacterMessage> {
   const seq = await nextSeq(tx, input.conversationId);

@@ -64,7 +64,9 @@ import {
   insertUserMessage,
   message,
   personaVersion,
+  requireConsent,
   tx,
+  type ConsentTicket,
   type MessageProvenance,
 } from '@drift/db';
 
@@ -160,10 +162,14 @@ export async function runTurn(
       sourceConversationId: found.id,
       acquiredVia: 'direct',
     };
+    // 消息落库就是敏感个人信息处理（RESEARCH §6.3）—— 票在同一个事务里取，
+    // 撤回过 sensitive_pi 的用户在这里直接抛错，而不是先写进去再说。
+    const ticket = await requireConsent(t, input.userId, 'sensitive_pi');
     const userMessage = await insertUserMessage(t, {
       conversationId: found.id,
       text: input.text,
       provenance,
+      ticket,
     });
     await t
       .update(conversation)
@@ -360,8 +366,15 @@ export async function runTurn(
     }
 
     // ── 7. 落库取 seq 并注入 disclosure，**然后**投递（CHAT-07）───────────
-    const characterMessage = await tx(async (t) =>
-      insertCharacterMessage(t, {
+    const characterMessage = await tx(async (t) => {
+      // 角色消息同样进 message 表，同样要票 —— 用户在本轮期间撤回 sensitive_pi 时，
+      // 这一步会抛错而不是把回复写进去（撤回后相应数据流**立即**停止，PRIV-02）。
+      const ticket: ConsentTicket<'sensitive_pi'> = await requireConsent(
+        t,
+        input.userId,
+        'sensitive_pi',
+      );
+      return insertCharacterMessage(t, {
         conversationId: prepared.conversation.id,
         text: gated.text,
         provenance: {
@@ -370,8 +383,9 @@ export async function runTurn(
           acquiredVia: 'direct',
         },
         audience: 'user',
-      }),
-    );
+        ticket,
+      });
+    });
     await db
       .update(conversation)
       .set({ lastMessageAt: characterMessage.createdAt })

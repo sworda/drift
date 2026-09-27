@@ -8,6 +8,7 @@ import { env } from '../config/env.ts';
 import { authRoutes } from '../modules/auth/routes.ts';
 import { characterRoutes } from '../modules/characters/routes.ts';
 import { chatRoutes } from '../modules/chat/routes.ts';
+import { consentRoutes } from '../modules/consent/routes.ts';
 import { friendshipRoutes } from '../modules/friendship/routes.ts';
 import { operatorSafetyRoutes } from '../modules/safety/routes.ts';
 import { logEvent } from '../obs/logger.ts';
@@ -42,6 +43,7 @@ export function createApp(): Hono {
 
   app.route('/', healthRoutes);
   app.route('/', authRoutes);
+  app.route('/', consentRoutes);
   app.route('/', characterRoutes);
   app.route('/', friendshipRoutes);
   app.route('/', chatRoutes);

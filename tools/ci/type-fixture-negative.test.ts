@@ -17,9 +17,17 @@ describe('负向 type fixture（V.0 #1）', () => {
     // 退出码为 0 意味着 GatedText 已退化为普通 string 别名 —— 本阶段最危险的静默失效。
     expect(run.status, `tsc 竟然通过了负向 fixture：\n${output}`).not.toBe(0);
     const errorLines = output.split('\n').filter((line) => /error TS\d+/.test(line));
-    // 阈值 4 而不是 3：Plan 06 给 gated-text-escape.ts 追加了两处 satisfies 违反，
-    // 品牌类型退化时六条违反会一起消失，所以阈值必须跟着抬 —— 停在 3 等于给
-    // 「少掉一半报错源」留了一条不会变红的路。
-    expect(errorLines.length, `error TS 行数不足：\n${output}`).toBeGreaterThanOrEqual(4);
+    // 阈值随报错源增加而抬：Plan 06 给 gated-text-escape.ts 追加了两处 satisfies 违反
+    // （4 → 6 个来源），Plan 09 又加了 consent-ticket-escape.ts 的四处违反。停在旧阈值
+    // 等于给「少掉一半报错源」留一条不会变红的路。
+    expect(errorLines.length, `error TS 行数不足：\n${output}`).toBeGreaterThanOrEqual(8);
+    // 两个 fixture 各自都必须有报错 —— 只看总数的话，一个 fixture 整个失效可以被
+    // 另一个的报错数掩盖过去。
+    for (const fixture of ['gated-text-escape.ts', 'consent-ticket-escape.ts']) {
+      expect(
+        errorLines.some((line) => line.includes(fixture)),
+        `${fixture} 一条 error TS 都没有 —— 它守的那条约束已经失效：\n${output}`,
+      ).toBe(true);
+    }
   });
 });

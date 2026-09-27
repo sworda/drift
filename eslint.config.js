@@ -40,6 +40,17 @@ export const REQUIRED_RESTRICTED_SYNTAX = [
   },
   {
     selector:
+      "TSAsExpression[typeAnnotation.type='TSTypeReference'][typeAnnotation.typeName.name=/^ConsentTicket$/]",
+    message:
+      'ConsentTicket 只能由 packages/db 的 requireConsent() 在查过 consent 表之后发出。断言一张票等于绕过合法性基础（PRIV-02）。',
+  },
+  {
+    selector:
+      "TSTypeAssertion[typeAnnotation.type='TSTypeReference'][typeAnnotation.typeName.name=/^ConsentTicket$/]",
+    message: 'ConsentTicket 只能由 requireConsent() 产出。尖括号断言同样禁止（PRIV-02）。',
+  },
+  {
+    selector:
       "TSTypeAssertion[typeAnnotation.type='TSTypeReference'][typeAnnotation.typeName.name=/^SyntheticText$/]",
     message: 'SyntheticText 只能由合成管道产出。尖括号断言同样禁止（PLAT-07）。',
   },

@@ -93,3 +93,34 @@ export const REQUIRED_SCOPES: readonly ConsentScope[] = CONSENT_SCOPES.filter(
 export function isRequiredScope(scope: ConsentScope): boolean {
   return CONSENT_SCOPE_SPECS[scope].required;
 }
+
+/** 撤回确认文案里的同意项名称占位符。 */
+export const CONSENT_LABEL_PLACEHOLDER = '{同意项名称}';
+
+/**
+ * 撤回确认文案（UI-SPEC `## Copywriting Contract` 的两条 Destructive confirmation 行，
+ * 逐字）。
+ *
+ * ⚠️ 服务端返回它、前端 AlertDialog 渲染它 —— 一份定义。抄两份的后果是两端在「撤回
+ * 这一项到底会发生什么」上各说各话，而那正是这条文案要防的误解。
+ * tools/ci/consent-copy-contract.test.ts 在运行时从 01-UI-SPEC.md 逐行提取并逐字比对，
+ * 所以改 UI-SPEC 而忘了改这里会立刻变红（同 legal-required-sentences.test.ts 的手法）。
+ */
+export const REVOKE_OPTIONAL_CONFIRMATION = `**撤回「${CONSENT_LABEL_PLACEHOLDER}」**：撤回后这项数据流会立即停止，这项内容也会从「我们收集了什么」里消失。已经发生过的对话无法被撤回。`;
+
+export const REVOKE_REQUIRED_CONFIRMATION = `**撤回「${CONSENT_LABEL_PLACEHOLDER}」**：这一项是提供服务的前提。撤回它等于停止服务并删除你的全部数据 —— 我们会立刻进入删除流程，删完给你一份回执。**此操作不可撤销。**请输入「删除我的全部数据」以确认。`;
+
+/**
+ * 撤回必选同意项时要求用户逐字输入的短语。
+ *
+ * 与 PRIV-05 一键删除是**同一个短语**，这不是复制粘贴的懒惰：撤回必选项与删除账号
+ * 在后果上是同一件事，用两个不同的短语会让用户以为它们不同。
+ */
+export const ACCOUNT_DELETION_CONFIRMATION_PHRASE = '删除我的全部数据';
+
+/** 渲染某个 scope 的撤回确认文案。必选与可选两条模板由 required 决定。 */
+export function revokeConfirmationCopy(scope: ConsentScope): string {
+  const spec = CONSENT_SCOPE_SPECS[scope];
+  const template = spec.required ? REVOKE_REQUIRED_CONFIRMATION : REVOKE_OPTIONAL_CONFIRMATION;
+  return template.replace(CONSENT_LABEL_PLACEHOLDER, spec.label);
+}
