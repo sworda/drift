@@ -56,6 +56,7 @@ import { registerExportBuild } from './jobs/export-build.ts';
 import { EXPORT_ARTIFACT_GC_QUEUE, registerExportArtifactGc } from './jobs/export-artifact-gc.ts';
 import { RETENTION_CLEANUP_QUEUE, registerRetentionCleanup } from './jobs/retention-cleanup.ts';
 import { registerUsageReminder } from './jobs/usage-reminder.ts';
+import { DEPENDENCY_SCAN_QUEUE, registerDependencyScan } from './jobs/dependency-scan.ts';
 import { setExportBoss } from '../modules/privacy/export-boss.ts';
 
 /** pg-boss 的专属 schema。drizzle 的 schemaFilter 必须排除它。 */
@@ -176,6 +177,14 @@ export async function startWorker(): Promise<WorkerHandle> {
     executor: db,
     onReminded: (segmentId, delivered) => {
       logEvent('usage.reminder_fired', { segmentId, count: delivered });
+    },
+  });
+
+  // 过度依赖信号的日扫（COMPLY-04 / Plan 12 Task 2）：04:00 北京时间。
+  await registerDependencyScan(boss, {
+    executor: db,
+    onEvent: (event, fields) => {
+      logEvent(event, { jobName: DEPENDENCY_SCAN_QUEUE, ...fields });
     },
   });
 
