@@ -3,7 +3,7 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-10-PLAN.md
+stopped_at: Completed 01-11-PLAN.md
 last_updated: "2026-09-27T12:58:52.084Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
@@ -12,7 +12,7 @@ progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 12
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 ## Current Position
 
 Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 13 of 15
+Plan: 12 of 15
 Status: Ready to execute
 Last activity: 2026-09-26 — Phase 01 execution started
 
@@ -70,6 +70,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P09 | 1h 18m | 3 tasks | 74 files |
 | Phase 01 P08 | 1h 40m | 3 tasks | 30 files |
 | Phase 01 P10 | 1h 35m | 3 tasks | 21 files |
+| Phase 01 P11 | 2h 30m | 3 tasks | 39 files |
 | Phase 01 P10 | 1h 35m | 3 tasks | 21 files |
 
 ## Accumulated Context
@@ -129,6 +130,12 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: DATA_INVENTORY 建成表×列粒度的单一真相源（165 条个人信息条目 + 显式豁免清单），四条双向断言 + buildCollectedView 全部做成纯函数；@drift/db 新增 ./inventory 纯子路径导出供 apps/web 测试消费（包入口的连接池边界保持不动） — PRIV-03 的「说明与实际存储字段一致」靠注册表而不是靠人维护；断言与视图构造做成纯函数后，负向 fixture 可以直接喂输入证明非空真，且 RTL 渲染层与 tools/ci 共享同一份词表/视图构造（一份定义、两个消费者）
 - [Phase 01]: privacy.md「我们收集什么」表只列当前真实收集的 12 类（humanLabel 集合与 DATA_INVENTORY 双向相等）；三个尚无数据流的同意项移到表后的如实披露段，隐私中心对应渲染第三态「已授权 · 尚未开始收集」 — 把 5 项同意直接渲染成 5 组「我们收集了…」等于披露尚未发生的收集（T-10-03），与写「匿名」同性质；两份清单分离是 RESEARCH §6.5 的裁决，Phase 7 研究管道落地时集合相等断言与第三态断言会自动翻转方向
 - [Phase 01]: 禁用词扫描核心（BANNED_TERMS/scanBannedTerms）定义在 packages/safety/src/banned-terms.ts 而非 tools/ci 的测试文件里；归一化直接复用 normalizeForRetentionMatch — 渲染层断言在 apps/web（react 只装在 apps/web），源码层在 tools/ci —— 两个消费者必须跑同一张词表，词表不能住在任何一个 .test 文件里（import 另一个测试文件会让 vitest 重复执行被引用例）；挽留词表也按同一原则从 retention-words.ts import
+  - "STORAGE_LOCATIONS 落在 packages/db/src/storage-locations.ts（24 项：7 去标识化 + 11 业务 DELETE + 邀请码置空 + pgboss 两项 + 导出文件 + pino + user 最后），回执 N = purge 成功执行且 countsAsCleared 不为 false 的项数（含 0 行成功项）；Q1 的去标识化项如实单列且不计入 N —— 0004 迁移为此把审计表的可回链列改为可空并给 purge_role 列级 UPDATE"
+  - "pg-boss 12.34 实测三件事：没有 archive 表（v10 概念，v12 完成作业留在 job 表）—— 注册表按防御形态保留该项；insert 实际落进 pgboss.job_common（job 是分区路由表）—— 跨角色授权必须对 schema 全部表而不是点名；app_role/purge_role 都需要 USAGE ON SCHEMA pgboss（0001 只给了 public）"
+  - "删除作业 data 不带 userId，只带 actionId —— pgboss 的 jsonb 载荷是注册表登记的存储位置，把「要删谁」写进删除自身管不到的地方等于自相矛盾；userId 从 privacy_action.payload 读，回执写回后由去标识化移除；幂等短路必须在完整性守卫之前（重跑读回的是无 userId 的回执形态）"
+  - "回执在账号删除后经 GET /privacy-receipts/:actionId?token= 读取 —— session 已随账号消失，一次性回执凭证（122 位随机，POST /me/delete 响应发放）是「已删除用户仍能拿到回执」的唯一诚实形态；错 token 返回 404 不披露存在性"
+  - "导出管道的 GatedText 接缝：gatedFromStoredCharacterMessage（disclosure 留证 → 恢复，不产生）是全仓第二处受控 as GatedText，egress-registry 的断言修订为「恰好两处」—— 强度不变，任何第三处仍然红"
+  - "retention-cleanup 的清理规则由 DATA_INVENTORY 的 retention 字段派生（buildRetentionRules 纯函数），源码无第二份期限清单；导出文件 7 天 TTL 委托给 export-artifact-gc（cron 0 5 * * *），retention-cleanup 错峰 45 18 * * *（均为 UTC）"
 
 ### Pending Todos
 
