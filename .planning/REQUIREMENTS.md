@@ -35,11 +35,11 @@
 
 ### 安全与危机干预 (SAFE)
 
-- [ ] **SAFE-01**: 安全判定在人格渲染**之后**以确定性覆写方式执行，不作为人格提示词的一部分
+- [x] **SAFE-01**: 安全判定在人格渲染**之后**以确定性覆写方式执行，不作为人格提示词的一部分
 - [x] **SAFE-02**: 危机判定不得由扮演角色的同一模型执行（人格指令会与安全指令竞争并系统性降低敏感度）
-- [ ] **SAFE-03**: 用户表现出极端情绪时，角色生成情绪安抚与鼓励寻求帮助的内容，**不联络紧急联系人**〔第十三条第一级〕
-- [ ] **SAFE-04**: 用户明确表示自残自杀意图或正面临重大财产损失时，系统提供援助信息并及时联络其监护人或紧急联系人〔第十三条第二级〕
-- [ ] **SAFE-05**: 风险分级为 watch / elevated / crisis 三档，仅 crisis 触发联络通道；分类器失败时 fail-closed 升到 elevated 而非 crisis
+- [x] **SAFE-03**: 用户表现出极端情绪时，角色生成情绪安抚与鼓励寻求帮助的内容，**不联络紧急联系人**〔第十三条第一级〕
+- [x] **SAFE-04**: 用户明确表示自残自杀意图或正面临重大财产损失时，系统提供援助信息并及时联络其监护人或紧急联系人〔第十三条第二级〕
+- [x] **SAFE-05**: 风险分级为 watch / elevated / crisis 三档，仅 crisis 触发联络通道；分类器失败时 fail-closed 升到 elevated 而非 crisis
 - [ ] **SAFE-06**: 风险等级 ≥ watch 时，角色对该用户的关系温度只允许持平，**不允许下降也不允许自动回暖**（自动回暖会使系统奖励自我伤害叙事）
 - [ ] **SAFE-07**: 角色可以冷淡但不得 ghosting —— 「已读不回」实现为增大 `reply_delay`，不得翻转 `will_reply` 布尔值
 - [ ] **SAFE-08**: 关系降温永远归因到角色自身状态，不得评判用户措辞；人格档案只展示角色变化，不展示任何用户评分
@@ -50,7 +50,7 @@
 - [ ] **SAFE-13**: 人格回滚发生时向受影响用户显式告知，不静默替换
 - [ ] **SAFE-14**: 系统具备过度依赖风险预警与情感边界引导能力〔第十条第二款〕
 - [ ] **SAFE-15**: 危机干预能力与疏远机制在同一阶段交付，不得分期〔第三十条最高档罚则 10-20 万只能经第十三条触达〕
-- [ ] **SAFE-16**: acute（crisis 级）事件须在有界时间内投递到运营者告警通道；投递结果驱动 `contact_attempt` 状态机 —— 投递返回 2xx 且业务码成功则进入 `pending`，**投递失败**直接进入 `unavailable`、**不经** `pending`；告警载荷类型**不含对话文本字段**，不得携带任何对话内容〔第十三条第二级的「及时联络」在 D-09 降级后的承载体〕
+- [x] **SAFE-16**: acute（crisis 级）事件须在有界时间内投递到运营者告警通道；投递结果驱动 `contact_attempt` 状态机 —— 投递返回 2xx 且业务码成功则进入 `pending`，**投递失败**直接进入 `unavailable`、**不经** `pending`；告警载荷类型**不含对话文本字段**，不得携带任何对话内容〔第十三条第二级的「及时联络」在 D-09 降级后的承载体〕
 
 ### 隐私与同意 (PRIV)
 
@@ -320,11 +320,11 @@
 | COMPLY-09 | Phase 1 | Complete |
 | COMPLY-10 | Phase 1 | Complete |
 | COMPLY-11 | Phase 1 | Pending |
-| SAFE-01 | Phase 1 | Pending |
+| SAFE-01 | Phase 1 | Complete |
 | SAFE-02 | Phase 1 | Complete |
-| SAFE-03 | Phase 1 | Pending |
-| SAFE-04 | Phase 1 | Pending |
-| SAFE-05 | Phase 1 | Pending |
+| SAFE-03 | Phase 1 | Complete |
+| SAFE-04 | Phase 1 | Complete |
+| SAFE-05 | Phase 1 | Complete |
 | SAFE-06 | Phase 5 | Pending |
 | SAFE-07 | Phase 2 | Pending |
 | SAFE-08 | Phase 5 | Pending |
@@ -335,7 +335,7 @@
 | SAFE-13 | Phase 5 | Pending |
 | SAFE-14 | Phase 1 | Pending |
 | SAFE-15 | Phase 5 | Pending |
-| SAFE-16 | Phase 1 | Pending |
+| SAFE-16 | Phase 1 | Complete |
 | PRIV-01 | Phase 1 | Complete |
 | PRIV-02 | Phase 1 | Complete |
 | PRIV-03 | Phase 1 | Pending |
