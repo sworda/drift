@@ -39,6 +39,7 @@ import { Message, MessageContent, MessageFooter, MessageGroup } from '@/componen
 import { CareCard, type CareCardData } from '../crisis/care-card';
 import { ExitSystemCard } from './exit-system-card';
 import { LIST_LOAD_ERROR_COPY } from './copy';
+import { MessageRetry } from './message-retry';
 import { UnreadSeparator } from './unread-separator';
 
 export interface ChatMessage {
@@ -51,6 +52,8 @@ export interface ChatMessage {
   readonly createdAt: string;
   /** 乐观发送中的本地消息。终态到达时**原地替换**，不重排、不滚动、不改焦点。 */
   readonly pending?: boolean;
+  /** 发送失败（网络断开/服务端未受理）：渲染重试控件，点击气泡或控件均可重试。 */
+  readonly failed?: boolean;
 }
 
 function formatTime(iso: string): string {
@@ -80,6 +83,8 @@ export interface ChatViewProps {
   /** 首载失败（与空消息流必须可区分 —— 不得静默渲染成「还没有开始」）。 */
   readonly loadFailed?: boolean | undefined;
   readonly onRetryLoad?: (() => void) | undefined;
+  /** 重试一条发送失败的消息（CHAT-03：点击气泡或重试控件均可）。 */
+  readonly onRetryMessage?: ((message: ChatMessage) => void) | undefined;
 }
 
 export function ChatView({
@@ -92,6 +97,7 @@ export function ChatView({
   emptyBody,
   loadFailed = false,
   onRetryLoad,
+  onRetryMessage,
 }: ChatViewProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -171,7 +177,21 @@ export function ChatView({
                   ) : (
                     <Message align={isUser ? 'end' : 'start'}>
                       <MessageContent>
-                        <Bubble variant={isUser ? 'default' : 'secondary'} align={isUser ? 'end' : 'start'}>
+                        {/* 发送失败：气泡左侧重试控件（图标 + 13px 文字，CHAT-03）；点击
+                            气泡或该控件均可重试（UI-SPEC error E4）。 */}
+                        {entry.failed === true && onRetryMessage !== undefined ? (
+                          <MessageRetry onRetry={() => onRetryMessage(entry)} />
+                        ) : null}
+                        <Bubble
+                          variant={isUser ? 'default' : 'secondary'}
+                          align={isUser ? 'end' : 'start'}
+                          className={entry.failed === true ? 'cursor-pointer' : undefined}
+                          onClick={
+                            entry.failed === true && onRetryMessage !== undefined
+                              ? () => onRetryMessage(entry)
+                              : undefined
+                          }
+                        >
                           {/* text-base 覆写上游默认的 14px。padding 保持默认的 12/8。 */}
                           <BubbleContent className="max-w-[80%] text-base break-words whitespace-normal">
                             {entry.text}
@@ -179,7 +199,11 @@ export function ChatView({
                         </Bubble>
                         {/* 时间戳在气泡**外**。用户气泡（accent 填充）内不承载次级文本。 */}
                         <MessageFooter>
-                          {entry.pending === true ? '发送中' : formatTime(entry.createdAt)}
+                          {entry.pending === true
+                            ? '发送中'
+                            : entry.failed === true
+                              ? '没有发出去'
+                              : formatTime(entry.createdAt)}
                         </MessageFooter>
                       </MessageContent>
                     </Message>

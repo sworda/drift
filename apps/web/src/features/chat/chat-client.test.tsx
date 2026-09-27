@@ -110,6 +110,29 @@ describe('ChatClient（CHAT-06/07 · COMPLY-01）', () => {
     expect(screen.getByTestId('unread-separator')).toBe(separator);
   });
 
+  it('四个 icon-only 控件都有可编程确定的名称：返回 / 发送 / 插入表情 / 更多操作', async () => {
+    stubApi({ firstUnreadSeq: null });
+    render(<ChatClient conversationId="conv-1" />);
+    await waitFor(() => screen.getByTestId('composer-input'));
+    // getByRole 的 name 查询逐个断言（UI-SPEC ## 交互契约 无障碍名称行）——
+    // tooltip 不作为唯一来源：这些控件根本没有 tooltip。
+    expect(screen.getByRole('link', { name: '返回' })).toBeDefined();
+    expect(screen.getByRole('button', { name: '发送' })).toBeDefined();
+    expect(screen.getByRole('button', { name: '插入表情' })).toBeDefined();
+    expect(screen.getByRole('button', { name: '更多操作' })).toBeDefined();
+  });
+
+  it('输入框增高后 AI 常驻条仍 sticky 置顶（不被挤出首屏）', async () => {
+    stubApi({ firstUnreadSeq: null });
+    render(<ChatClient conversationId="conv-1" />);
+    const banner = await waitFor(() => screen.getByTestId('ai-banner-chat'));
+    // jsdom 无布局：结构保证 = sticky top-0（滚动时钉在视口顶）。
+    expect(banner.className).toContain('sticky');
+    expect(banner.className).toContain('top-0');
+    // 输入区高度封顶（5 行后框内滚动），结构上不可能把常驻条顶出首屏。
+    expect(screen.getByTestId('composer-input').className).toContain('max-h-[140px]');
+  });
+
   it('空消息流（新会话）下 AI 常驻条与空态文案都在场，不渲染成分割线', async () => {
     vi.stubGlobal(
       'fetch',

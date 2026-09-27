@@ -52,3 +52,7 @@ export const SEND_FAILED_COPY = '这条消息没有发出去 —— 网络似乎
 /** 重试控件（图标旁的 13px 可见文字；aria-label 见 MESSAGE_RETRY_ARIA）。 */
 export const MESSAGE_RETRY_LABEL = '重试';
 export const MESSAGE_RETRY_ARIA = '重试发送这条消息';
+
+/** 输入栏（E5）：占位符与 icon-only 发送控件的可访问名称（UI-SPEC 无障碍名称行）。 */
+export const COMPOSER_PLACEHOLDER = '说点什么…';
+export const SEND_LABEL = '发送';

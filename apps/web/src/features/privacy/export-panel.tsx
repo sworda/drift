@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { EmptyOrError } from '@/components/empty-or-error';
 import { Progress } from '@/components/ui/progress';
 
 import { EXPORT_CTA, EXPORT_FAILED_COPY, EXPORT_PACKING_COPY, EXPORT_SLOW_NOTE } from './copy';
@@ -82,15 +83,16 @@ export function ExportPanel({ deletedAt }: ExportPanelProps) {
     if (slowTimer.current !== null) clearTimeout(slowTimer.current);
   }
 
-  // 删除后的空态优先（E9 empty：成功标准 4 的可见证据）。
+  // 删除后的空态优先（E9 empty：成功标准 4 的可见证据）。经由 EmptyOrError ——
+  // 空态/错误态的统一区分容器（Plan 14 Task 2，四处接入点之一）。
   if (deletedAt !== undefined && deletedAt !== null) {
     return (
-      <div className="px-md py-lg" data-testid="export-deleted-empty">
-        <p className="text-body font-medium text-text-primary">这里已经没有你的数据了</p>
-        <p className="mt-sm whitespace-normal break-words text-label leading-relaxed text-text-secondary">
-          你在 {deletedAt} 删除了全部数据。新产生的对话会重新出现在这里。
-        </p>
-      </div>
+      <EmptyOrError
+        kind="empty"
+        testId="export-deleted-empty"
+        heading="这里已经没有你的数据了"
+        body={`你在 ${deletedAt} 删除了全部数据。新产生的对话会重新出现在这里。`}
+      />
     );
   }
 
@@ -116,15 +118,12 @@ export function ExportPanel({ deletedAt }: ExportPanelProps) {
       ) : null}
 
       {phase.kind === 'failed' ? (
-        <div className="mt-md rounded-lg border border-destructive/30 bg-destructive/10 px-md py-sm" role="alert">
-          <p className="whitespace-normal break-words text-label leading-relaxed text-destructive">{EXPORT_FAILED_COPY}</p>
-          <button
-            type="button"
-            className="mt-sm text-label font-medium text-destructive underline-offset-4 hover:underline"
-            onClick={() => void startExport()}
-          >
-            重试一次
-          </button>
+        <div className="mt-md" data-testid="export-failed">
+          <EmptyOrError
+            kind="error"
+            message={EXPORT_FAILED_COPY}
+            action={{ label: '重试一次', onRetry: () => void startExport() }}
+          />
         </div>
       ) : null}
 

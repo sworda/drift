@@ -39,3 +39,28 @@ if (typeof globals['document'] !== 'undefined') {
     };
   }
 }
+
+// matchMedia：jsdom 不实现（Plan 14 的 EmojiPicker 用 pointer: coarse 判定移动端）。
+// 与 ResizeObserver 同一条纪律：只补环境不补行为 —— stub 恒报「非触屏」，
+// 不伪造任何媒体查询命中；触屏分支由 variant 覆写参数直接测。
+interface MediaQueryListStub {
+  readonly matches: boolean;
+  readonly media: string;
+  addEventListener(): void;
+  removeEventListener(): void;
+  addListener(): void;
+  removeListener(): void;
+}
+
+if (typeof globals['matchMedia'] === 'undefined') {
+  globals['matchMedia'] = function matchMedia(media: string): MediaQueryListStub {
+    return {
+      matches: false,
+      media,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+    };
+  };
+}

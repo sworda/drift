@@ -25,12 +25,15 @@ import { buildCareCard, type CareCard } from '@drift/safety';
 import { AiBadge } from '@/components/ai-badge';
 import { AiBanner } from '@/components/ai-banner';
 import { useChatSocket } from '@/lib/chat-socket';
-import { API_ORIGIN, authedFetch } from '@/lib/session';
+import { authedFetch } from '@/lib/session';
+
+import { reportClientError } from '@/components/error-boundary';
 
 import type { CareCardData as CareCardView } from '../crisis/care-card';
 import type { ContactStatus } from '../crisis/copy';
 import { ChatView, type ChatMessage } from './chat-view';
 import { CHAT_EMPTY_BODY_TEMPLATE, CHAT_EMPTY_HEADING } from './copy';
+import { Composer } from './composer';
 import { DependencyNoticeDialog } from './dependency-notice-dialog';
 import { EndedComposer } from './exit-system-card';
 import { ChatMoreSheet } from './more-sheet';
@@ -52,17 +55,34 @@ type LoadState =
   | { readonly kind: 'error' }
   | { readonly kind: 'ok'; readonly conversation: ConversationMeta };
 
-/** 渲染失败 / 前端异常的上报口（Task 2 的 /telemetry/error 白名单字段）。 */
-async function reportError(kind: string): Promise<void> {
-  try {
-    await fetch(`${API_ORIGIN}/telemetry/error`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ errorName: kind, route: window.location.pathname }),
-    });
-  } catch {
-    // 上报本身失败不再上报（无出口），也不影响 UI —— 它是旁路。
-  }
+/** 渲染失败 / 前端异常的上报口（/telemetry/error 白名单字段，见 error-boundary.ts）。 */
+function reportError(kind: string): void {
+  void reportClientError({ errorName: kind, route: window.location.pathname });
+}
+
+/** TurnResult 的客户端形状（apps/api chat/routes.ts 的响应）。 */
+interface TurnResponse {
+  readonly turnId: string;
+  readonly userMessage: { readonly id: string; readonly seq: number };
+  readonly reply:
+    | { readonly outcome: 'gated'; readonly id: string; readonly seq: number; readonly delivered: number }
+    | {
+        readonly outcome: 'escalated';
+        readonly level: 'elevated' | 'crisis';
+        readonly careCard: CareCardView;
+        readonly safetyEventId: string;
+        readonly riskLevel: string;
+        readonly contact: unknown;
+      }
+    | { readonly outcome: 'refused'; readonly reason: string }
+    | { readonly outcome: 'exited'; readonly systemMessage: { readonly id: string; readonly seq: number }; readonly endedAt: string };
+}
+
+/** 浏览器与 jsdom 都有的 randomUUID；没有时用递减计数器兜底。 */
+let localIdSeq = 0;
+function newLocalId(): string {
+  localIdSeq += 1;
+  return `local-${String(localIdSeq)}`;
 }
 
 /** 服务端 CareCard（@drift/safety）→ 渲染层视图（crisis/care-card）。同形。 */
@@ -81,6 +101,7 @@ export function ChatClient({ conversationId }: { readonly conversationId: string
   const [moreOpen, setMoreOpen] = useState(false);
   const [crisisCard, setCrisisCard] = useState<CareCardView | null>(null);
   const [ended, setEnded] = useState(false);
+  const [sending, setSending] = useState(false);
   // 最近一次联络状态事件（care_card 事件先到、contact_status 后到时补齐卡片数据用）。
   const latestContact = useRef<{
     readonly status: ContactStatus;
@@ -199,6 +220,92 @@ export function ChatClient({ conversationId }: { readonly conversationId: string
     },
   });
 
+  /**
+   * 发送（CHAT-03 + E4/E5）：乐观 pending 消息 → POST；受理后原地替换为服务端行。
+   * 失败（网络/未受理）：failed 态 + 重试控件，输入内容保留（Composer 不清空）。
+   * 角色回复**不**从响应里取 —— 它没有正文（GatedText 只在 WS/补拉通道上出现），
+   * WS deliver 或重连 backfill 才是消息正文的入口。
+   */
+  const postMessage = useCallback(
+    async (text: string, localId: string): Promise<boolean> => {
+      setSending(true);
+      try {
+        const response = await authedFetch(`/conversations/${conversationId}/messages`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        if (!response.ok) {
+          setMessages((current) =>
+            current.map((m) => (m.messageId === localId ? { ...m, failed: true } : m)),
+          );
+          return false;
+        }
+        const body = (await response.json()) as TurnResponse;
+        setMessages((current) =>
+          current.map((m) =>
+            m.messageId === localId
+              ? { ...m, messageId: body.userMessage.id, seq: body.userMessage.seq, pending: false, failed: false }
+              : m,
+          ),
+        );
+        if (body.reply.outcome === 'escalated') {
+          // 关怀卡片带全量数据到达（TurnResult.reply.careCard）—— 这是不落 message
+          // 表的结构化对象（01-07 handoff #48），渲染层用 Alert 版式。
+          setCrisisCard(body.reply.careCard);
+        } else if (body.reply.outcome === 'exited') {
+          setEnded(true);
+          await backfill();
+        }
+        return true;
+      } catch {
+        setMessages((current) =>
+          current.map((m) => (m.messageId === localId ? { ...m, failed: true } : m)),
+        );
+        return false;
+      } finally {
+        setSending(false);
+      }
+    },
+    [backfill, conversationId],
+  );
+
+  const send = useCallback(
+    async (text: string): Promise<boolean> => {
+      const localId = newLocalId();
+      setMessages((current) => [
+        ...current,
+        {
+          messageId: localId,
+          seq: maxSeqRef.current + 1,
+          senderKind: 'user',
+          text,
+          disclosure: null,
+          createdAt: new Date().toISOString(),
+          pending: true,
+        },
+      ]);
+      return postMessage(text, localId);
+    },
+    [postMessage],
+  );
+
+  /** 重试（CHAT-03：点击气泡或重试控件均可）—— 原地回到 pending 再 POST。 */
+  const retryMessage = useCallback(
+    (message: ChatMessage): void => {
+      const localId = newLocalId();
+      setMessages((current) =>
+        current.map((m) =>
+          m.messageId === message.messageId
+            ? { ...m, messageId: localId, pending: true, failed: false }
+            : m,
+        ),
+      );
+      void postMessage(message.text, localId);
+    },
+    [postMessage],
+  );
+
   /** 「更多 → 结束本次会话」：直接执行（无二次确认，UI-SPEC 硬退出契约）。 */
   const endSession = useCallback(async () => {
     try {
@@ -272,9 +379,14 @@ export function ChatClient({ conversationId }: { readonly conversationId: string
         }
         loadFailed={loadState.kind === 'error'}
         onRetryLoad={() => void load()}
+        onRetryMessage={retryMessage}
       />
 
-      {ended ? <EndedComposer /> : null}
+      {ended ? (
+        <EndedComposer />
+      ) : (
+        <Composer onSend={send} pending={sending} disabled={loadState.kind !== 'ok'} />
+      )}
 
       <UsageReminderDialog open={usageOpen} onOpenChange={setUsageOpen} reportError={reportError} />
       <DependencyNoticeDialog

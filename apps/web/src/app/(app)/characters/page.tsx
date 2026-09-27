@@ -8,8 +8,8 @@
 // 一个角色都没有（seed 前），与全部已添加（按 friendship 判定）。
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 
+import { EmptyOrError } from '@/components/empty-or-error';
 import {
   CharacterList,
   type CharacterListItem,
@@ -84,29 +84,20 @@ export default function CharactersPage() {
       ) : null}
 
       {state.kind === 'error' ? (
-        <div role="alert" className="flex flex-col items-start gap-sm px-md py-lg">
-          <p className="text-body text-destructive">{LIST_LOAD_ERROR_COPY}</p>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="text-body text-primary underline underline-offset-4"
-          >
-            {RETRY_LABEL}
-          </button>
-        </div>
+        <EmptyOrError
+          kind="error"
+          message={LIST_LOAD_ERROR_COPY}
+          action={{ label: RETRY_LABEL, onRetry: () => void load() }}
+        />
       ) : null}
 
       {state.kind === 'ok' && state.allAdded ? (
-        <div className="flex flex-col items-start gap-sm px-md py-lg">
-          <p className="text-body font-semibold text-text-primary">{ALL_ADDED_HEADING}</p>
-          <p className="text-body text-text-secondary">{ALL_ADDED_BODY}</p>
-          <Link
-            href="/conversations"
-            className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-md text-base text-primary-foreground"
-          >
-            {ALL_ADDED_GOTO}
-          </Link>
-        </div>
+        <EmptyOrError
+          kind="empty"
+          heading={ALL_ADDED_HEADING}
+          body={ALL_ADDED_BODY}
+          cta={{ label: ALL_ADDED_GOTO, href: '/conversations' }}
+        />
       ) : null}
 
       {state.kind === 'ok' && !state.allAdded ? <CharacterList characters={state.characters} /> : null}

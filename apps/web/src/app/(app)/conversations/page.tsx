@@ -9,8 +9,8 @@
 // + 重试，绝不静默渲染成「还没有任何对话」。
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 
+import { EmptyOrError } from '@/components/empty-or-error';
 import {
   ConversationList,
   type ConversationListItem,
@@ -75,29 +75,20 @@ export default function ConversationsPage() {
       ) : null}
 
       {state.kind === 'error' ? (
-        <div role="alert" className="flex flex-col items-start gap-sm px-md py-lg">
-          <p className="text-body text-destructive">{LIST_LOAD_ERROR_COPY}</p>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="text-body text-primary underline underline-offset-4"
-          >
-            {CONVERSATIONS_RETRY_LABEL}
-          </button>
-        </div>
+        <EmptyOrError
+          kind="error"
+          message={LIST_LOAD_ERROR_COPY}
+          action={{ label: CONVERSATIONS_RETRY_LABEL, onRetry: () => void load() }}
+        />
       ) : null}
 
       {state.kind === 'ok' && state.conversations.length === 0 ? (
-        <div className="flex flex-col items-start gap-sm px-md py-lg">
-          <p className="text-body font-semibold text-text-primary">{CONVERSATIONS_EMPTY_HEADING}</p>
-          <p className="text-body text-text-secondary">{CONVERSATIONS_EMPTY_BODY}</p>
-          <Link
-            href="/characters"
-            className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-md text-base text-primary-foreground"
-          >
-            {CONVERSATIONS_EMPTY_CTA}
-          </Link>
-        </div>
+        <EmptyOrError
+          kind="empty"
+          heading={CONVERSATIONS_EMPTY_HEADING}
+          body={CONVERSATIONS_EMPTY_BODY}
+          cta={{ label: CONVERSATIONS_EMPTY_CTA, href: '/characters' }}
+        />
       ) : null}
 
       {state.kind === 'ok' && state.conversations.length > 0 ? (

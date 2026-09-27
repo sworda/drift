@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 
+import { EmptyOrError } from '@/components/empty-or-error';
 import {
   CharacterDetail,
   CharacterDetailSkeleton,
@@ -47,16 +48,11 @@ export default function CharacterDetailPage() {
     <main className="mx-auto min-h-dvh w-full max-w-[480px]">
       {state.kind === 'loading' ? <CharacterDetailSkeleton /> : null}
       {state.kind === 'error' ? (
-        <div role="alert" className="flex flex-col items-start gap-sm px-md py-lg">
-          <p className="text-body text-destructive">{LIST_LOAD_ERROR_COPY}</p>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="text-body text-primary underline underline-offset-4"
-          >
-            重试
-          </button>
-        </div>
+        <EmptyOrError
+          kind="error"
+          message={LIST_LOAD_ERROR_COPY}
+          action={{ label: '重试', onRetry: () => void load() }}
+        />
       ) : null}
       {state.kind === 'ok' ? <CharacterDetail character={state.character} /> : null}
     </main>
