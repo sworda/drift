@@ -17,14 +17,16 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { CONSENT_SCOPES, CONTACT_PHONE_PATTERN, EMERGENCY_CONTACT_KINDS } from '@drift/contract';
+import {
+  CONSENT_SCOPES,
+  CONTACT_PHONE_PATTERN,
+  EMERGENCY_CONTACT_KINDS,
+  isAdult,
+} from '@drift/contract';
 
 import { logError, logEvent } from '../../obs/logger.ts';
 import { InviteCodeUnavailableError } from './invite.ts';
 import { ContactFormatError, registerWithInvite, RequiredConsentMissingError } from './register.ts';
-
-/** 18 周岁。用出生日期算，不用「是否成年」布尔值（后者会在生日那天变成错的）。 */
-const MIN_AGE_YEARS = 18;
 
 const RegisterBody = z.object({
   inviteCode: z.string().min(1).max(64),
@@ -41,14 +43,6 @@ const RegisterBody = z.object({
     phone: z.string().regex(CONTACT_PHONE_PATTERN, { error: '需为 11 位手机号' }),
   }),
 });
-
-export function isAdult(birthDate: string, now: Date = new Date()): boolean {
-  const born = new Date(`${birthDate}T00:00:00.000Z`);
-  if (Number.isNaN(born.getTime())) return false;
-  const eighteenth = new Date(born);
-  eighteenth.setUTCFullYear(eighteenth.getUTCFullYear() + MIN_AGE_YEARS);
-  return eighteenth.getTime() <= now.getTime();
-}
 
 export const authRoutes = new Hono();
 

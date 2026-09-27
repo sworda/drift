@@ -21,3 +21,22 @@ export const CONTACT_PHONE_PATTERN = /^1[3-9]\d{9}$/;
 export function isValidContactPhone(value: string): boolean {
   return CONTACT_PHONE_PATTERN.test(value);
 }
+
+/** COMPLY-07 的年龄门槛。 */
+export const MIN_AGE_YEARS = 18;
+
+/**
+ * 是否已满 18 周岁。**由出生日期算**，不存「是否成年」布尔值 —— 后者会在用户生日
+ * 那天变成错的，而没有任何东西会去更新它。
+ *
+ * 定义在 @drift/contract 而不是各端各写一份：注册页要用它决定渲染不渲染法定终态
+ * 拒绝页，服务端要用它决定 403。两份实现的边界条件（生日当天、闰日）一旦不一致，
+ * 就会出现「界面放行、服务端拒绝」或者更糟的反向组合。
+ */
+export function isAdult(birthDate: string, now: Date = new Date()): boolean {
+  const born = new Date(`${birthDate}T00:00:00.000Z`);
+  if (Number.isNaN(born.getTime())) return false;
+  const eighteenth = new Date(born);
+  eighteenth.setUTCFullYear(eighteenth.getUTCFullYear() + MIN_AGE_YEARS);
+  return eighteenth.getTime() <= now.getTime();
+}

@@ -1,4 +1,15 @@
+import { fileURLToPath } from 'node:url';
+
 import { defineConfig } from 'vitest/config';
+
+/**
+ * apps/web 的 `@/*` 路径别名。
+ *
+ * 它定义在 apps/web/tsconfig.json 的 paths 里，而 Vite **不读** tsconfig paths ——
+ * 不在这里映一次，apps/web 的组件在 vitest 下会以 `Cannot find package '@/components/…'`
+ * 失败，而 vitest 把这类失败报成「0 test」，看不出原因。
+ */
+const WEB_SRC = fileURLToPath(new URL('./apps/web/src/', import.meta.url));
 
 /**
  * 验证层级切分（01-RESEARCH.md § Validation Architecture V.1）。
@@ -18,11 +29,18 @@ export default defineConfig({
     passWithNoTests: false,
     projects: [
       {
+        resolve: { alias: [{ find: /^@\//u, replacement: WEB_SRC }] },
         test: {
           // L3 单元：纯函数，不连数据库、不连 LLM。
           name: 'unit',
           environment: 'node',
-          include: ['packages/**/src/**/*.test.ts', 'apps/**/src/**/*.test.ts'],
+          // ⚠️ 含 .tsx：apps/web 的静态渲染断言（react-dom/server）住在组件旁边，
+          // 因为 react 只装在 apps/web/node_modules 里 —— 从 tools/ci 解析不到它。
+          include: [
+            'packages/**/src/**/*.test.ts',
+            'apps/**/src/**/*.test.ts',
+            'apps/**/src/**/*.test.tsx',
+          ],
           testTimeout: 10_000,
         },
       },

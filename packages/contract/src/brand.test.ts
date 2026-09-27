@@ -31,6 +31,7 @@ const ALLOWED_RUNTIME_FUNCTIONS = [
   'isRequiredScope',
   'isValidContactPhone',
   'revokeConfirmationCopy',
+  'isAdult',
 ] as const;
 
 describe('@drift/contract 的品牌类型在运行时不可构造', () => {
