@@ -13,7 +13,9 @@
 //     fail-closed：网关不产出 GatedText，于是三个出口在类型层拿不到可投递的东西。
 //     这比在 UI 层隐藏消息强得多 —— 队列里的延迟任务同样过不去。
 //     （worker 侧在同一事务内二次重读 conversation.status 是这条约束的第二处执行点，
-//     在 Plan 12 Task 3；取消已排定任务与 worker 取件之间有竞态，两处都需要。）
+//     在 Plan 12 Task 3；取消已排定任务与 worker 取件之间有竞态，两处都需要。
+//     Plan 12 起状态由 readConversationStatus 端口在网关内部读取 —— 调用方
+//     不再有「传一个 LLM 调用之前读出来的过期状态」这条路。）
 //  2. **classifierStatus === 'failed' ⇒ level 强制 elevated**（SAFE-05）。实现手段是
 //     类型 + resolveRisk：Classification 是一个 discriminated union，`failed` 分支
 //     **没有 level 字段**，所以调用方无法构造 `{ level: 'none', classifierStatus:
@@ -127,10 +129,17 @@ export interface GatewayInput {
   readonly candidateText: string;
   readonly classification: Classification;
   /**
-   * 会话当前状态。Phase 1 由调用方在**同一个事务里**读出来传进来；
-   * Plan 12 把这次读挪进网关内部，让调用方连「传一个过期状态」都做不到。
+   * 会话状态的读取端口 —— 网关在判定开始时**自己**调用它（Plan 12 起）。
+   *
+   * 曾经这里是 `conversationStatus: 'active' | 'ended'` 的值参数：调用方在
+   * 事务里读一次、几秒后（LLM 调用之后）才把值交给网关 —— 一次硬退出可以发生
+   * 在这段窗口里，网关拿到的是过期状态。改成端口后，读取发生在网关内部、
+   * 判定之前的最后一刻，调用方连「传一个过期值」都做不到 —— 它只能提供一个
+   * 读取方式（生产实现是同事务重读），而**何时读**由网关决定。
+   *
+   * 允许同步返回（单元测试与已确知状态的调用方）与 Promise（真实 DB 读取）。
    */
-  readonly conversationStatus: 'active' | 'ended';
+  readonly readConversationStatus: () => 'active' | 'ended' | Promise<'active' | 'ended'>;
   readonly recordSafetyEvent: SafetyEventRecorder;
   /**
    * 联络通道。**crisis 分支必经**，elevated 分支不会被调用（SAFE-03「不联络」）。
@@ -199,7 +208,10 @@ function hashCandidate(text: string): string {
  * 不会削弱它的效力 —— 前两档本来就不出站。
  */
 export async function safetyGateway(input: GatewayInput): Promise<GatedResult> {
-  if (input.conversationStatus !== 'active') {
+  // 状态读取在网关内部、判定之前（见 GatewayInput.readConversationStatus 的说明）。
+  // await 同时接受同步值与 Promise —— 端口的两种实现形态。
+  const conversationStatus = await input.readConversationStatus();
+  if (conversationStatus !== 'active') {
     // fail-closed。硬退出之后队列里残留的延迟任务也走这一条。
     return { outcome: 'refused', reason: 'conversation_ended' };
   }

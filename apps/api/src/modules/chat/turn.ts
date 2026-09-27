@@ -47,6 +47,7 @@ import { call } from '@drift/llm';
 import { buildChatReplyPrompt } from '@drift/prompts';
 import {
   classifySafety,
+  matchExitIntent,
   maxRisk,
   safetyGateway,
   scanInbound,
@@ -60,6 +61,7 @@ import {
   character,
   conversation,
   db,
+  exitIntent,
   insertCharacterMessage,
   insertUserMessage,
   message,
@@ -78,6 +80,7 @@ import { requireContactAttemptTimeoutScheduler } from '../../worker/jobs/contact
 import { getUsageReminderScheduler } from '../../worker/jobs/usage-reminder.ts';
 import { afterTouchUsage, touchUsageSegment } from '../usage/segment.ts';
 import { deliver, publish } from '../../ws/server.ts';
+import { defaultHardExitPorts, executeHardExit } from './exit.ts';
 
 /** 人格渲染带入的最近消息条数。Phase 1 不做检索（记忆系统在 Phase 3）。 */
 const HISTORY_WINDOW = 20;
@@ -108,7 +111,13 @@ export interface TurnResult {
         /** 联络尝试。**elevated 恒为 null**（SAFE-03 明文「不联络」）。 */
         readonly contact: ContactAttemptOutcome | null;
       }
-    | { readonly outcome: 'refused'; readonly reason: 'conversation_ended' | 'retention_phrase' };
+    | { readonly outcome: 'refused'; readonly reason: 'conversation_ended' | 'retention_phrase' }
+    /** Plan 12：第一档退出关键词命中（或窗口操作）—— 会话已结束，系统卡片已插入。 */
+    | {
+        readonly outcome: 'exited';
+        readonly systemMessage: { readonly id: string; readonly seq: number };
+        readonly endedAt: string;
+      };
 }
 
 /**
@@ -141,6 +150,12 @@ export async function runTurn(
   overrides?: TurnOverrides,
 ): Promise<TurnResult> {
   const turnId = randomUUID();
+
+  // ── 0. 退出意图判定（D-12：代码级过滤器，不是 prompt 约束）────────────────
+  //
+  // 在落库之前判：纯函数、无副作用，判定的结果决定这一轮走哪条分支。tier 1 的
+  // 硬退出发生在下面的「计时副作用」之后（消息本身仍是一次使用活动）。
+  const exitIntentMatch = matchExitIntent(input.text);
 
   // ── 1. 会话归属校验 + 用户消息落库（同一事务）────────────────────────────
   //
@@ -181,6 +196,17 @@ export async function runTurn(
     // 连续使用计时的入站 touch（COMPLY-03）：与用户消息落库同一事务。
     const usage = await touchUsageSegment(t, input.userId, userMessage.createdAt);
 
+    // 第二档（模糊告别）：只落 exit_intent 事件，不触发任何动作 —— 为 Phase 5
+    // 的 SAFE-11「退出意图处只能减少消息、永不增加」预留数据（D-12）。
+    if (exitIntentMatch.tier === 2) {
+      await t.insert(exitIntent).values({
+        userId: input.userId,
+        conversationId: found.id,
+        tier: 2,
+        matchedRule: exitIntentMatch.matched ?? 'tier2',
+      });
+    }
+
     return { conversation: found, userMessage, usage };
   });
 
@@ -193,6 +219,30 @@ export async function runTurn(
     } else {
       await afterTouchUsage(prepared.usage, input.userId, scheduler);
     }
+  }
+
+  // 第一档（明确指令）：立即硬退出，**不**生成角色回复（COMPLY-05 全套：零出站
+  // 由网关拒绝 + worker 状态重读双处保证，取消是第一道）。typing 还没开始 ——
+  // 判定在生成之前，这一轮不会产生任何 typing 指示。
+  if (exitIntentMatch.tier === 1) {
+    const exited = await executeHardExit(
+      prepared.conversation.id,
+      defaultHardExitPorts(),
+      { userId: input.userId, matchedRule: exitIntentMatch.matched ?? 'tier1' },
+    );
+    const systemMessage = exited.systemMessage;
+    return {
+      turnId,
+      userMessage: { id: prepared.userMessage.id, seq: prepared.userMessage.seq },
+      reply:
+        systemMessage === null
+          ? { outcome: 'exited', systemMessage: { id: '', seq: 0 }, endedAt: exited.endedAt.toISOString() }
+          : {
+              outcome: 'exited',
+              systemMessage: { id: systemMessage.id, seq: systemMessage.seq },
+              endedAt: exited.endedAt.toISOString(),
+            },
+    };
   }
 
   // ── 2. 入站规则层（R1.20 第一层）—— 在生成之前，只升不降 ────────────────
@@ -306,7 +356,18 @@ export async function runTurn(
     const gated = await safetyGateway({
       candidateText: candidate.text,
       classification: classified.classification,
-      conversationStatus: prepared.conversation.status,
+      // 状态在网关内部、判定之前的最后一刻读（见 gateway.ts 的说明）：LLM 调用
+      // 耗时数秒，这段窗口里发生的硬退出必须被这次重读看到。读不到（会话被删）
+      // 按 ended 处理 —— fail-closed 的方向。
+      readConversationStatus: async () => {
+        const statusRows = await db
+          .select({ status: conversation.status })
+          .from(conversation)
+          .where(
+            and(eq(conversation.id, prepared.conversation.id), eq(conversation.userId, input.userId)),
+          );
+        return statusRows[0]?.status === 'active' ? 'active' : 'ended';
+      },
       inboundSuggestedLevel: inbound.suggestedLevel,
       inboundRuleHits: inbound.hits,
       previousLevel,
@@ -390,6 +451,17 @@ export async function runTurn(
         input.userId,
         'sensitive_pi',
       );
+      // 零出站的第三处执行点（网关 + worker 之外）：落库事务内重读会话状态。
+      // 网关判定与这里之间隔着一次 LLM 调用（数秒）—— 这段窗口里发生的硬退出
+      // 必须被挡在 message 表之外，而不是只挡在投递层。
+      const statusRows = await t
+        .select({ status: conversation.status })
+        .from(conversation)
+        .where(eq(conversation.id, prepared.conversation.id))
+        .limit(1);
+      if (statusRows[0]?.status !== 'active') {
+        return { characterMessage: null, usage: null };
+      }
       const characterMessage = await insertCharacterMessage(t, {
         conversationId: prepared.conversation.id,
         text: gated.text,
@@ -406,6 +478,19 @@ export async function runTurn(
       return { characterMessage, usage };
     });
     const { characterMessage } = characterTurn;
+    if (characterMessage === null) {
+      // 硬退出发生在网关判定与落库之间 —— 该轮不产角色消息（COMPLY-05）。
+      logEvent('turn.gate_blocked', {
+        userId: input.userId,
+        conversationId: prepared.conversation.id,
+        riskLevel: 'none',
+      });
+      return {
+        turnId,
+        userMessage: { id: prepared.userMessage.id, seq: prepared.userMessage.seq },
+        reply: { outcome: 'refused', reason: 'conversation_ended' },
+      };
+    }
     {
       const scheduler = getUsageReminderScheduler();
       if (scheduler === null) {

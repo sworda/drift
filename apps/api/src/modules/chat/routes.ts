@@ -13,6 +13,7 @@ import { conversation, db, listMessagesAfterSeq } from '@drift/db';
 import { currentUserId } from '../auth/session.ts';
 import { logError, logEvent } from '../../obs/logger.ts';
 import { ConversationNotFoundError, runTurn } from './turn.ts';
+import { defaultHardExitPorts, executeHardExit } from './exit.ts';
 
 /** 入参上限来自 contract 的同一个常量 —— UI 的 2000 字视觉测试（Plan 14）与它同源。 */
 const SendBody = z.object({
@@ -53,6 +54,39 @@ chatRoutes.post('/conversations/:id/messages', async (c) => {
     }
     logError('chat.send_failed', error, { userId, route: '/conversations/:id/messages' });
     return c.json({ error: 'turn_failed' }, 500);
+  }
+});
+
+/**
+ * 窗口操作退出（第十九条 / UI-SPEC ## 硬退出呈现契约）：「更多」Sheet 的
+ * 「结束本次会话」入口。与关键词路径走同一个 executeHardExit —— 两条退出
+ * 途径在服务端是同一套保证（零出站双处执行 + 中性系统卡片）。
+ */
+chatRoutes.post('/conversations/:id/exit', async (c) => {
+  const userId = await currentUserId(c);
+  if (userId === null) return c.json({ error: 'unauthorized' }, 401);
+
+  const conversationId = c.req.param('id');
+  if (!(await assertOwnedConversation(userId, conversationId))) {
+    return c.json({ error: 'not_found' }, 404);
+  }
+
+  try {
+    const result = await executeHardExit(conversationId, defaultHardExitPorts(), {
+      userId,
+      matchedRule: 'window_control',
+    });
+    return c.json(
+      {
+        endedAt: result.endedAt.toISOString(),
+        systemMessage: result.systemMessage,
+        alreadyEnded: result.alreadyEnded,
+      },
+      200,
+    );
+  } catch (error) {
+    logError('chat.exit_failed', error, { userId, route: '/conversations/:id/exit' });
+    return c.json({ error: 'exit_failed' }, 500);
   }
 });
 

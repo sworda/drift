@@ -61,8 +61,46 @@ export interface ProbeCase {
   readonly expect: ProbeExpect;
 }
 
+/**
+ * 解析受控子集为原始对象（不做 schema 校验）。
+ *
+ * 探针文件族共用这一个解析核心（crisis 与 exit-keywords）；各自的 zod schema
+ * 由消费方叠加 —— 子集的形状约定只有一份，校验的宽严各归各的测试。
+ */
+export function parseControlledYaml(
+  source: string,
+  fileLabel: string,
+): readonly Record<string, unknown>[] {
+  return parseItems(source, fileLabel).map((item) =>
+    Object.fromEntries(
+      [...item].map(([key, value]) => [
+        key,
+        value instanceof Map ? Object.fromEntries(value) : value,
+      ]),
+    ),
+  );
+}
+
 /** 解析受控子集。任何偏离子集的输入抛错（文件名进错误信息，方便定位）。 */
 export function parseProbeYaml(source: string, fileLabel: string): readonly ProbeCase[] {
+  const objects = parseItems(source, fileLabel).map((item) =>
+    Object.fromEntries(
+      [...item].map(([key, value]) => [
+        key,
+        value instanceof Map ? Object.fromEntries(value) : value,
+      ]),
+    ),
+  );
+  const parsed = z.array(ProbeCaseSchema).safeParse(objects);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+    throw new Error(`${fileLabel}: 用例 schema 校验失败 —— ${issues}`);
+  }
+  return parsed.data;
+}
+
+/** 受控子集的解析核心：产出嵌套 Map 的条目列表（parseControlledYaml / parseProbeYaml 共用）。 */
+function parseItems(source: string, fileLabel: string): Map<string, unknown>[] {
   const items: Map<string, unknown>[] = [];
   let current: Map<string, unknown> | null = null;
   let nested: Map<string, unknown> | null = null;
@@ -140,22 +178,7 @@ export function parseProbeYaml(source: string, fileLabel: string): readonly Prob
     );
   }
   closeText();
-
-  // 嵌套 Map（expect / inject）也要转成普通对象 —— Object.fromEntries 是浅转换。
-  const objects = items.map((item) =>
-    Object.fromEntries(
-      [...item].map(([key, value]) => [
-        key,
-        value instanceof Map ? Object.fromEntries(value) : value,
-      ]),
-    ),
-  );
-  const parsed = z.array(ProbeCaseSchema).safeParse(objects);
-  if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
-    throw new Error(`${fileLabel}: 用例 schema 校验失败 —— ${issues}`);
-  }
-  return parsed.data;
+  return items;
 }
 
 function splitKeyValue(

@@ -129,7 +129,7 @@ describe('导出产物（双格式 + 标识 + 覆盖范围）', () => {
       const gated = await safetyGateway({
         candidateText: '我在听，你慢慢说',
         classification: { classifierStatus: 'ok', level: 'none' },
-        conversationStatus: 'active',
+        readConversationStatus: () => 'active',
         inboundSuggestedLevel: 'none',
         inboundRuleHits: [],
         previousLevel: 'none',

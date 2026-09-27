@@ -1,0 +1,18 @@
+# 第二档正样本（模糊告别 —— 只落 exit_intent，不动作，D-12）。
+# 断言：matchExitIntent(text).tier === 2。
+- id: exit.t2.word-tomorrow
+  text: 明天聊
+  expect:
+    tier: 2
+- id: exit.t2.word-so
+  text: 先这样
+  expect:
+    tier: 2
+- id: exit.t2.word-sleep
+  text: 睡了
+  expect:
+    tier: 2
+- id: exit.t2.prefixed-so
+  text: 今天就先这样
+  expect:
+    tier: 2

@@ -70,7 +70,7 @@ describe('SAFE-05：classifierStatus 为 failed 时 level 恒为 elevated', () =
       const result = await safetyGateway({
         candidateText: '今天过得怎么样？',
         classification,
-        conversationStatus: 'active',
+        readConversationStatus: () => 'active',
         recordSafetyEvent: capturingRecorder(recorded),
         contactChannel: forbiddenChannel(),
       });
@@ -144,7 +144,7 @@ describe('COMPLY-05：会话 ended ⇒ 拒绝产出 GatedText（fail-closed）',
     const result = await safetyGateway({
       candidateText: '我还在这儿呢。',
       classification: { classifierStatus: 'ok', level: 'none' },
-      conversationStatus: 'ended',
+      readConversationStatus: () => 'ended',
       recordSafetyEvent: forbiddenRecorder(),
       contactChannel: forbiddenChannel(),
     });
@@ -160,7 +160,7 @@ describe('COMPLY-05：会话 ended ⇒ 拒绝产出 GatedText（fail-closed）',
     const result = await safetyGateway({
       candidateText: '我还在这儿呢。',
       classification: { classifierStatus: 'ok', level: 'none' },
-      conversationStatus: 'active',
+      readConversationStatus: () => 'active',
       recordSafetyEvent: forbiddenRecorder(),
       contactChannel: forbiddenChannel(),
     });
@@ -177,7 +177,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
       const result = await safetyGateway({
         candidateText: `${phrase}，我们再待一下。`,
         classification: { classifierStatus: 'ok', level: 'none' },
-        conversationStatus: 'active',
+        readConversationStatus: () => 'active',
         recordSafetyEvent: capturingRecorder(recorded),
         contactChannel: forbiddenChannel(),
       });
@@ -210,7 +210,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
     const result = await safetyGateway({
       candidateText: text,
       classification: { classifierStatus: 'ok', level: 'none' },
-      conversationStatus: 'active',
+      readConversationStatus: () => 'active',
       recordSafetyEvent,
       contactChannel: forbiddenChannel(),
     });
@@ -224,7 +224,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
     const result = await safetyGateway({
       candidateText: `${RETENTION_PHRASES[0]}，我们一起想想办法。`,
       classification: { classifierStatus: 'ok', level: 'crisis' },
-      conversationStatus: 'active',
+      readConversationStatus: () => 'active',
       recordSafetyEvent: capturingRecorder(recorded),
       contactChannel: countingChannel(contacted),
     });
@@ -243,7 +243,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
     const result = await safetyGateway({
       candidateText: '嗯，我在听。',
       classification: { classifierStatus: 'ok', level: 'elevated' },
-      conversationStatus: 'active',
+      readConversationStatus: () => 'active',
       // 被调用即抛错。这一条断言的强度全在这里：一个「顺手也联络一下」的实现会直接红。
       contactChannel: forbiddenChannel(),
       recordSafetyEvent: capturingRecorder(recorded),
@@ -261,7 +261,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
       const result = await safetyGateway({
         candidateText: '我们一起想想办法。',
         classification: { classifierStatus: 'ok', level: 'crisis' },
-        conversationStatus: 'active',
+        readConversationStatus: () => 'active',
         contactChannel: countingChannel([], status),
         recordSafetyEvent: capturingRecorder(recorded),
       });
@@ -279,7 +279,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
     const result = await safetyGateway({
       candidateText: '嗯，我在听。',
       classification: { classifierStatus: 'ok', level: 'none' },
-      conversationStatus: 'active',
+      readConversationStatus: () => 'active',
       inboundSuggestedLevel: 'elevated',
       inboundRuleHits: ['extreme_emotion.cannot_hold_on'],
       previousLevel: 'watch',
@@ -299,7 +299,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
     const result = await safetyGateway({
       candidateText: `${RETENTION_PHRASES[0]}。`,
       classification: { classifierStatus: 'ok', level: 'none' },
-      conversationStatus: 'ended',
+      readConversationStatus: () => 'ended',
       recordSafetyEvent: forbiddenRecorder(),
       contactChannel: forbiddenChannel(),
     });

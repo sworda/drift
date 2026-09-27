@@ -135,6 +135,55 @@ export async function insertCharacterMessage(
   return { ...row, disclosure };
 }
 
+/**
+ * 系统消息落库（Plan 12：硬退出的中性系统卡片）。
+ *
+ * ── 为什么不需要 GatedText ────────────────────────────────────────────────
+ * 它不是模型输出，而是平台常量（EXIT_SYSTEM_CARD_COPY，@drift/contract）——
+ * 出站网关的存在理由是拦模型输出，平台自己的固定文案不是它的管辖对象。类型上
+ * 与 insertCharacterMessage 的分野（GatedText vs string）就是这条边界的形状：
+ * 想拿模型输出走这个入口的人，过不了签名。
+ *
+ * ── 为什么不需要同意票 ─────────────────────────────────────────────────────
+ * ticket 守的是「把**用户的**敏感个人信息写进 message 表」这个处理动作。系统
+ * 卡片的正文是一句与用户无关的平台常量，行内没有任何用户内容 —— 没有处理
+ * 动作就没有票的义务。provenance.acquiredVia = 'system' 让这个区分在数据里
+ * 看得见（IFC-08）。
+ *
+ * ── 不受 message_disclosure_required 约束 ──────────────────────────────────
+ * 该 CHECK 只约束 sender_kind = 'character'：系统卡片是平台的退出确认，不是
+ * AI 生成内容，不需要 AI 标识（UI-SPEC ## 硬退出呈现契约）。
+ */
+export async function insertSystemMessage(
+  tx: Tx,
+  input: {
+    readonly conversationId: string;
+    /** 平台常量文案（调用方从 @drift/contract 取，不接受任意模型输出）。 */
+    readonly text: string;
+  },
+): Promise<InsertedMessage> {
+  const seq = await nextSeq(tx, input.conversationId);
+  const rows = await tx
+    .insert(message)
+    .values({
+      conversationId: input.conversationId,
+      seq,
+      senderKind: 'system',
+      text: input.text,
+      disclosure: null,
+      provenance: {
+        sourceUserId: null,
+        sourceConversationId: input.conversationId,
+        acquiredVia: 'system',
+      },
+      audience: 'user',
+    })
+    .returning({ id: message.id, seq: message.seq, createdAt: message.createdAt });
+  const row = rows[0];
+  if (row === undefined) throw new Error('系统消息插入未返回行');
+  return row;
+}
+
 export interface ListedMessage {
   readonly id: string;
   readonly seq: number;

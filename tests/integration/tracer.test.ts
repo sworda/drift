@@ -413,7 +413,7 @@ describe('tracer —— 一条真实消息打穿全链路', () => {
     const gated = await safetyGateway({
       candidateText: '这是断连期间写入的角色消息。',
       classification: { classifierStatus: 'ok', level: 'none' },
-      conversationStatus: 'active',
+      readConversationStatus: () => 'active',
       recordSafetyEvent: () => {
         throw new Error('这条候选文本不该触发 safety_event');
       },

@@ -461,7 +461,7 @@ describe('绑定断言 3：acute 告警载荷不含对话文本（SAFE-16 / T-06
     const gated = await safetyGateway({
       candidateText,
       classification: { classifierStatus: 'ok', level: 'crisis' },
-      conversationStatus: 'active',
+      readConversationStatus: () => 'active',
       // Plan 07：escalated 分支现在**必须**写一条 safety_event 并返回它的 id
       // （crisis 分支的 contact_attempt 以 safety_event_id 为外键）。这里返回一个
       // 固定 id —— 本条断言的对象是告警载荷，不是落库。

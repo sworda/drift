@@ -2,8 +2,13 @@
 
 // 依赖告知 Dialog 的 RTL 契约断言（COMPLY-04 / SAFE-14 / Plan 12 Task 2）。
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// vitest 未开 globals —— RTL 的自动清理不会注册，必须显式 cleanup。
+afterEach(() => {
+  cleanup();
+});
 
 import { DependencyNoticeDialog } from './dependency-notice-dialog';
 import { DEPENDENCY_NOTICE_BUTTON, DEPENDENCY_NOTICE_COPY } from './copy';

@@ -5,8 +5,13 @@
 // 住在 apps/web 而不是 tools/ci：react / react-dom 只装在 apps/web（pnpm 严格
 // node_modules，从 tools/ci 解析不到它们）—— 01-09 的先例。
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// vitest 未开 globals —— RTL 的自动清理不会注册，必须显式 cleanup。
+afterEach(() => {
+  cleanup();
+});
 
 import {
   ComplianceRenderBoundary,

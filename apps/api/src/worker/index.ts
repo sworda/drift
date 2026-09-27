@@ -58,6 +58,7 @@ import { RETENTION_CLEANUP_QUEUE, registerRetentionCleanup } from './jobs/retent
 import { registerUsageReminder } from './jobs/usage-reminder.ts';
 import { DEPENDENCY_SCAN_QUEUE, registerDependencyScan } from './jobs/dependency-scan.ts';
 import { setExportBoss } from '../modules/privacy/export-boss.ts';
+import { setHardExitBoss } from '../modules/chat/exit.ts';
 
 /** pg-boss 的专属 schema。drizzle 的 schemaFilter 必须排除它。 */
 export const PGBOSS_SCHEMA = 'pgboss';
@@ -179,6 +180,10 @@ export async function startWorker(): Promise<WorkerHandle> {
       logEvent('usage.reminder_fired', { segmentId, count: delivered });
     },
   });
+
+  // 硬退出的作业取消端口（COMPLY-05 / Plan 12 Task 3）：HTTP 链路（关键词退出
+  // 与窗口操作退出）经它取消该会话排队中的作业。
+  setHardExitBoss(boss);
 
   // 过度依赖信号的日扫（COMPLY-04 / Plan 12 Task 2）：04:00 北京时间。
   await registerDependencyScan(boss, {

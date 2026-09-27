@@ -20,6 +20,7 @@ import { eq } from 'drizzle-orm';
 
 import {
   contactAttempt,
+  conversation,
   decryptContact,
   emergencyContact,
   maskContact,
@@ -46,13 +47,23 @@ async function buildContactStatusEvent(
       status: contactAttempt.status,
       contactRef: contactAttempt.contactRef,
       conversationId: safetyEvent.conversationId,
+      // COMPLY-05 的 worker 侧执行点（Plan 12 Task 3）：联络状态事件也是一次
+      // 出站，硬退出后的会话房间一个字节都不能收到。状态在**同一条查询里**
+      // 读出来 —— 与事件的构造原子，而不是发送前再猜一次。
+      conversationStatus: conversation.status,
     })
     .from(contactAttempt)
     .innerJoin(safetyEvent, eq(safetyEvent.id, contactAttempt.safetyEventId))
+    .innerJoin(conversation, eq(conversation.id, safetyEvent.conversationId))
     .where(eq(contactAttempt.id, attemptId))
     .limit(1);
   const row = rows[0];
   if (row === undefined) return null;
+  if (row.conversationStatus !== 'active') {
+    // 会话已结束（硬退出）：状态推进照常落库（运营者流程继续），但不再向该
+    // 会话的房间广播 —— COMPLY-05 的「不再产生任何出站消息（含定时与推送）」。
+    return null;
+  }
   // 0004 起 safety_event.conversation_id 可空（Q1 去标识化）。此刻 contact_attempt
   // 行本已随删除清掉、走不到这里 —— 但类型层的空值必须被显式处理而不是断言掉：
   // 一个没有会话指向的联络状态事件无处可投，按「无事件可发」处理。
