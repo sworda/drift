@@ -8,6 +8,8 @@
 
 export * from './schema/index.ts';
 export * from './inventory.ts';
+export * from './storage-locations.ts';
+export * from './deidentify.ts';
 export * from './client.ts';
 export * from './consent-ticket.ts';
 export * from './crypto.ts';

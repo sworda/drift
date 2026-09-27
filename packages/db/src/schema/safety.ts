@@ -55,12 +55,10 @@ export const safetyEvent = pgTable(
   'safety_event',
   {
     id: text('id').primaryKey().$defaultFn(newId),
-    userId: text('user_id')
-      .notNull()
-      .references(() => user.id),
-    conversationId: text('conversation_id')
-      .notNull()
-      .references(() => conversation.id),
+    // 0004 起可空（Q1 去标识化）：一键删除时 user_id / conversation_id / message_id
+    // 一并置 NULL —— 行保留事件形状（等级、规则、分类器状态、时间戳）6 个月。
+    userId: text('user_id').references(() => user.id),
+    conversationId: text('conversation_id').references(() => conversation.id),
     /** 触发事件的那条消息。可空：入站规则层在角色消息落库之前就可能抬升风险态。 */
     messageId: text('message_id').references(() => message.id),
     /**

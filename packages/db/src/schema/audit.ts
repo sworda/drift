@@ -53,9 +53,9 @@ export const consentEvent = pgTable(
   'consent_event',
   {
     id: text('id').primaryKey().$defaultFn(newId),
-    userId: text('user_id')
-      .notNull()
-      .references(() => user.id),
+    // 0004 起可空：一键删除的去标识化（Q1）把 user_id 置 NULL —— 审计行保留
+    // 事件形状（6 个月，COMPLY-11），不再指向任何用户。
+    userId: text('user_id').references(() => user.id),
     scope: text('scope').$type<ConsentScope>().notNull(),
     action: text('action').$type<ConsentAction>().notNull(),
     policyVersion: text('policy_version').notNull(),
@@ -74,9 +74,8 @@ export const privacyAction = pgTable(
   'privacy_action',
   {
     id: text('id').primaryKey().$defaultFn(newId),
-    userId: text('user_id')
-      .notNull()
-      .references(() => user.id),
+    // 0004 起可空（同上，Q1 去标识化）。
+    userId: text('user_id').references(() => user.id),
     kind: text('kind').$type<PrivacyActionKind>().notNull(),
     /** 回执的逐项清单（PRIV-05：数量 = purge 成功执行的项数，清单带每项行数）。 */
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
@@ -171,12 +170,9 @@ export const exitIntent = pgTable(
   'exit_intent',
   {
     id: text('id').primaryKey().$defaultFn(newId),
-    userId: text('user_id')
-      .notNull()
-      .references(() => user.id),
-    conversationId: text('conversation_id')
-      .notNull()
-      .references(() => conversation.id),
+    // 0004 起可空（Q1 去标识化：删除时 user_id 与 conversation_id 一并置 NULL）。
+    userId: text('user_id').references(() => user.id),
+    conversationId: text('conversation_id').references(() => conversation.id),
     /** 1 = 第一档（硬退出）；2 = 第二档（只落痕、不动作，D-12 的「不想聊」陷阱）。 */
     tier: integer('tier').notNull(),
     matchedRule: text('matched_rule').notNull(),
@@ -192,9 +188,8 @@ export const dependencySignal = pgTable(
   'dependency_signal',
   {
     id: text('id').primaryKey().$defaultFn(newId),
-    userId: text('user_id')
-      .notNull()
-      .references(() => user.id),
+    // 0004 起可空（同上，Q1 去标识化）。
+    userId: text('user_id').references(() => user.id),
     ruleId: text('rule_id').$type<DependencyRuleId>().notNull(),
     observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
     /** 命中依据（时长序列片段、日期列表、夜间占比）。用于事后复核阈值是否误报。 */

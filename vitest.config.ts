@@ -64,6 +64,8 @@ export default defineConfig({
             '**/dist/**',
             'tools/ci/schema-drift.test.ts',
             'tools/ci/pgboss-delay-api.test.ts',
+            'tools/ci/storage-registry-db.test.ts',
+            'tools/ci/pino-no-pii.test.ts',
           ],
           testTimeout: 10_000,
         },
@@ -77,6 +79,8 @@ export default defineConfig({
             'tests/integration/**/*.test.ts',
             'tools/ci/schema-drift.test.ts',
             'tools/ci/pgboss-delay-api.test.ts',
+            'tools/ci/storage-registry-db.test.ts',
+            'tools/ci/pino-no-pii.test.ts',
           ],
           testTimeout: 120_000,
           // 每次运行重建一个一次性 drift_test 库并跑 migrate + seed，teardown 时 drop。

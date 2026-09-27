@@ -29,6 +29,13 @@
       "when": 1790492122879,
       "tag": "0003_contact_attempt_state_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790521821107,
+      "tag": "0004_audit_deidentify",
+      "breakpoints": true
     }
   ]
 }

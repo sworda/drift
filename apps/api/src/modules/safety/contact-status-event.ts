@@ -53,6 +53,10 @@ async function buildContactStatusEvent(
     .limit(1);
   const row = rows[0];
   if (row === undefined) return null;
+  // 0004 起 safety_event.conversation_id 可空（Q1 去标识化）。此刻 contact_attempt
+  // 行本已随删除清掉、走不到这里 —— 但类型层的空值必须被显式处理而不是断言掉：
+  // 一个没有会话指向的联络状态事件无处可投，按「无事件可发」处理。
+  if (row.conversationId === null) return null;
 
   const contacts = await executor
     .select({ name: emergencyContact.name, ref: emergencyContact.contactRefEncrypted })
