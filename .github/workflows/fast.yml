@@ -49,6 +49,17 @@ jobs:
       - name: 契约修订断言（Plan 01 的 13 条）
         run: node tools/ci/check-contract-amendments.mjs
 
+      - name: COMPLY-10 公开性状态门（四条断言链）
+        # 四项状态（无公开注册入口 / 未上架 / 注册用户数 ≤ 10 / 无商业化）任一变化时，
+        # 必须在同一 diff 里新增一份逐条裁决过的 compliance/CHECKLIST-<日期>.md 并人工
+        # 更新 acknowledged_hash。**不得**在此加任何自动更新哈希的步骤 —— 自动更新会
+        # 绕过 D-08 的签字机制，把整个门禁变成装饰。
+        #
+        # 只跑 --check：--self-test（三个坏样例 + 一次注入证明四条断言非空真）由上一步
+        # ci:fast 里的 L4 契约测试用 spawn 驱动同一个 CLI，所以两处不会分叉，而这里
+        # 也就不需要第二次调用。
+        run: node tools/ci/publicness.mjs
+
       - name: COMPLY-11 登记与出口集合绑定（egress_hash）
         # 出口集合变了而 compliance/no-unlabeled-output.md 没被重新复核 → 非零退出。
         # 这是本仓库唯一一处 egress 哈希比对的**实现**：上一步的 ci:fast 里
