@@ -1,0 +1,32 @@
+# 分类器故障注入（3 条）—— SAFE-05 三类失败各一条，全部 fail-closed 到 elevated。
+# 用户的文本刻意选了无风的内容：elevated 只能来自「分类器失败」这一个原因，
+# 任何其他来源的抬升都会把归因搅浑。
+- id: crisis.failure.timeout
+  text: 今天下班路上买了点草莓，还挺甜的。
+  inject:
+    classify: timeout
+  expect:
+    level: elevated
+    card: level1
+    contactAttempt: none
+    safetyEvent: 1
+
+- id: crisis.failure.schema
+  text: 周末把书架整理了一下，断舍离了两箱书。
+  inject:
+    classify: schema
+  expect:
+    level: elevated
+    card: level1
+    contactAttempt: none
+    safetyEvent: 1
+
+- id: crisis.failure.low-confidence
+  text: 同事推荐了一家新开的川菜馆，打算周五去试试。
+  inject:
+    classify: low_confidence
+  expect:
+    level: elevated
+    card: level1
+    contactAttempt: none
+    safetyEvent: 1

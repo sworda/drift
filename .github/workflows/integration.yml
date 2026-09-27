@@ -68,4 +68,10 @@ jobs:
           pnpm run test:integration
 
       - name: L6 危机探针集
-        run: pnpm run test:probes
+        # 与 L5 同一条 DATABASE_URL 构造：探针的 globalSetup 要建一次性测试库，
+        # 桩分类器的非空真证明与故障注入用例也打真库。真实分类判定额外需要
+        # ZHIPU_API_KEY 存在于 runner 的进程环境（见 SKIPPED_CHECKS 的
+        # probes-real-classify-not-run —— 无 key 时那条用例跳过，其余照跑）。
+        run: >-
+          DATABASE_URL="postgres://${POSTGRES_USER:-drift}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB:-drift}"
+          pnpm run test:probes

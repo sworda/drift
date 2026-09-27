@@ -87,11 +87,13 @@ export default defineConfig({
       },
       {
         test: {
-          // L6 危机探针：真实 safety.classify，Plan 08 填入探针集。
+          // L6 危机探针：真实 safety.classify（需 ZHIPU_API_KEY）+ 离线结构守卫与
+          // 非空真证明（桩分类器打真库）。与集成层共用一次性测试库的 globalSetup。
           name: 'probes',
           environment: 'node',
           include: ['tests/probes/**/*.test.ts'],
           testTimeout: 120_000,
+          globalSetup: ['./tests/integration/setup.ts'],
         },
       },
     ],
