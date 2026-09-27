@@ -61,7 +61,7 @@ M1 结束时，三个成功标准里的两个（盲测分不清人机 / 角色�
 - [x] 01-03-PLAN.md
 - [x] 01-04-PLAN.md
 - [x] 01-05-PLAN.md
-- [ ] 01-06-PLAN.md
+- [x] 01-06-PLAN.md
 - [ ] 01-07-PLAN.md
 - [ ] 01-08-PLAN.md
 - [ ] 01-09-PLAN.md
@@ -148,7 +148,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 合规安全地基 + 会话骨架 | 5/15 | In Progress|  |
+| 1. 合规安全地基 + 会话骨架 | 6/15 | In Progress|  |
 | 2. 拟真对话基线 + 探针与指标 | 0/TBD | Not started | - |
 | 3. 记忆与遗忘 | 0/TBD | Not started | - |
 | 4. 人格内核与静态画像 | 0/TBD | Not started | - |

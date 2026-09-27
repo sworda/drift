@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-09-27T03:40:37.774Z"
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-09-27T04:57:39.017Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
-state_head: 4c04bcf39081b47248d431847865080883218215
+state_head: 8b71be34731dc9b888e01b291bc077afb3bed136
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 15
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 ## Current Position
 
 Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 6 of 15
+Plan: 7 of 15
 Status: Ready to execute
 Last activity: 2026-09-26 — Phase 01 execution started
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P03 | 1h 22m | 3 tasks | 45 files |
 | Phase 01 P04 | 21 min | 3 tasks | 77 files |
 | Phase 01 P05 | 30 min | 3 tasks | 35 files |
+| Phase 01 P06 | 51 min | 3 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,10 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: prompt_version 取系统提示词的内容哈希，不取拼装后整段文本的哈希 — 01-04 用整段文本（含人格小传与本轮用户消息）的哈希做 version，于是每一行 llm_call 的 prompt_version 都不相同 —— 「当时生效的是哪一版提示词」这个问题反而答不出来，而那正是 PLAT-08 存在的理由。人格侧版本由 persona_version_id 负责，逐轮输入的同一性由 input_hash 负责，三者分工不重叠。
 - [Phase 01]: glm-4.7-flash 的可 pin 性如实标成 alias-only（Q4），并在 SKIPPED_CHECKS.md 登记为一次检查强度降级 — 01-04 的 PINNABLE 里该模型是未核实的 snapshot。STACK §15.9 明确未找到带日期的快照 ID（Confidence MEDIUM）。标错的后果是 safety.classify 被厂商静默换掉而探针通过率的变化被归因错。三层处理：pinned 模式拒绝启动、routed 模式要求书面 aliasOnlyWaiver、nightly 的 resolved_model 日 diff 连续采样。
 - [Phase 01]: 真实 provider 实例用 fetch 直连 git 写死的 baseURL，暂不引入 ai / @ai-sdk/* — 仓库里没有安装任何 provider SDK，而安装它是一次阻断式人工包合法性确认（Plan 02 协议）；Phase 1 的 LLM_PROVIDER_MODE 默认 mock。方向上直连也更强：PLAT-06 怕的是 AI SDK 字符串 model 写法默认路由到境外 AI Gateway，而直连一个写死的 baseURL 结构上没有这个形态。接 live 时再走一次 checkpoint 引入 AI SDK，届时 providers/openai-compatible.ts 是唯一需要替换的实现。
+- [Phase 01]: EGRESS_POINTS 出口注册表 + AST 集合相等断言堵住 branded type 方案唯一的结构性缺口（新增出口接受 string 不报错） — 类型系统只检查已写成 GatedText 的签名，对「本该写 GatedText 却写成 string」没有意见；注册表把该缺口变成一条可失败的检查，失配信息分「未登记」与「已消失」两类以免修法搞反
+- [Phase 01]: COMPLY-11 落成显式空集登记，front-matter 的 egress_hash 与 EGRESS_POINTS 绑定且不许 CI 自动更新 — 空集结论只在当时的出口集合上成立；自动更新哈希会绕过人工复核，把登记变成装饰
+- [Phase 01]: 挽留话术改为网关内运行时拦截（词表一份定义，命中即不产出 GatedText 并写 safety_event） — 源码 grep 抓不到模型生成的挽留话术；验收目标是触发率恒为 0 而非低，故归一化去标点与零宽字符，接受极少数过拦截
+- [Phase 01]: safetyGateway 的拒绝态沿用 Plan 04 的 outcome 判别式，不改成 PLAN 写的 ok:false — 两个判别式可以互相矛盾（ok:true + outcome:refused），而「不可表达」是这套类型方案的全部价值
 
 ### Pending Todos
 
@@ -115,6 +120,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T03:38:02.856Z
-Stopped at: Completed 01-05-PLAN.md
+Last session: 2026-09-27T04:57:17.687Z
+Stopped at: Completed 01-06-PLAN.md
 Resume file: None

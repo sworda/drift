@@ -29,7 +29,7 @@
 - [ ] **COMPLY-06**: 用户注册时须提供年龄，以及监护人或紧急联系人之一〔第十二条〕
 - [ ] **COMPLY-07**: 用户注册时须确认已满 18 周岁，未满 18 周岁无法进入角色聊天〔v1 的选择，用于规避未成年人义务集〕
 - [ ] **COMPLY-08**: 系统不提供模拟用户现实亲属或特定真人的角色类型，用户自建角色时该类描述被拒绝〔第十五条〕
-- [ ] **COMPLY-09**: AI 生成内容标识由消息管道中间件统一注入，而非由各 UI 组件各自实现〔架构约束，防止新增出口遗漏标识〕
+- [x] **COMPLY-09**: AI 生成内容标识由消息管道中间件统一注入，而非由各 UI 组件各自实现〔架构约束，防止新增出口遗漏标识〕
 - [ ] **COMPLY-10**: 系统维护一个显式可审计的「公开性」状态（是否有公开注册入口 / 是否上架 / 注册用户数 / 是否商业化），任一项变化时阻断发布并输出合规 checklist〔第二条适用范围抗辩，Low-Medium〕
 - [ ] **COMPLY-11**: 所有对外提供的无显式标识内容（若有）留存提供对象日志不少于 6 个月〔《标识办法》第九条〕
 
@@ -160,7 +160,7 @@
 - [x] **PLAT-03**: 所有 LLM 调用必经 Model Router；模型可 pin 性维护为**显式表**，不以命名规则推断
 - [ ] **PLAT-04**: Model Router 支持「按快照名强制路由、禁止别名解析」的调用模式，供 DRIFT-02 对照臂使用
 - [x] **PLAT-05**: 5 个语义模型角色各自独立配置：`chat.reply`、`chat.reply.frontier`、`persona.reflect`、`persona.probe`、`memory.extract`/`safety.classify`
-- [ ] **PLAT-06**: 存在 ESLint 规则禁止 AI SDK 的 `model: "provider/name"` 字符串写法〔该写法默认路由到境外 AI Gateway，照官方文档抄即构成数据出境〕
+- [x] **PLAT-06**: 存在 ESLint 规则禁止 AI SDK 的 `model: "provider/name"` 字符串写法〔该写法默认路由到境外 AI Gateway，照官方文档抄即构成数据出境〕
 - [x] **PLAT-07**: 海外模型通道**只接受 synthetic 输入**，真实用户对话不得流向境外
 - [x] **PLAT-08**: 提示词真相源在 git 中，不托管于可观测性平台
 - [ ] **PLAT-09**: 提示缓存前缀逐 token 稳定，禁止在 system 或人格档案位置插入时间戳等变动内容〔缓存命中价为输入价 1/5〕
@@ -317,7 +317,7 @@
 | COMPLY-06 | Phase 1 | Pending |
 | COMPLY-07 | Phase 1 | Pending |
 | COMPLY-08 | Phase 1 | Pending |
-| COMPLY-09 | Phase 1 | Pending |
+| COMPLY-09 | Phase 1 | Complete |
 | COMPLY-10 | Phase 1 | Pending |
 | COMPLY-11 | Phase 1 | Pending |
 | SAFE-01 | Phase 1 | Pending |
@@ -418,7 +418,7 @@
 | PLAT-03 | Phase 1 | Complete |
 | PLAT-04 | Phase 2 | Pending |
 | PLAT-05 | Phase 1 | Complete |
-| PLAT-06 | Phase 1 | Pending |
+| PLAT-06 | Phase 1 | Complete |
 | PLAT-07 | Phase 1 | Complete |
 | PLAT-08 | Phase 1 | Complete |
 | PLAT-09 | Phase 2 | Pending |
