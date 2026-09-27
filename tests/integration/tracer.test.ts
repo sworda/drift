@@ -47,6 +47,7 @@ const {
   tx,
 } = await import('@drift/db');
 const { safetyGateway } = await import('@drift/safety');
+const { PROMPTS } = await import('@drift/prompts');
 
 const POLICY_VERSION = 'sha256:tracer-policy';
 
@@ -333,7 +334,19 @@ describe('tracer —— 一条真实消息打穿全链路', () => {
       // 计价档位：火山方舟与智谱分段计费，不记档位算不出真实成本，而 llm_call 是
       // append-only 表 —— 等到有人去看成本时补不了历史行。
       expect((row.priceTier ?? '').length, `${row.purpose} 的 price_tier 为空`).toBeGreaterThan(0);
+      // PLAT-08：prompt_version 是内容哈希，不是手工递增的版本号。
+      expect(row.promptVersion.startsWith('pv_'), `${row.purpose} 的 prompt_version 不是内容哈希`).toBe(true);
     }
+
+    // 落库的 prompt_version 与 git 里注册表的值**逐字相等**。这一条是「真相源在
+    // git」的可查询形态：两者不等就意味着运行时生效的提示词不是仓库里那一份，
+    // 而那正是 prompt_version 失去归因能力的唯一途径。于是「改了提示词但版本没变」
+    // 在结构上不可能发生 —— 版本由正文算出来（单元测试证明改一个标点即变化）。
+    const replyCall = calls.find((row) => row.purpose === 'chat.reply');
+    const classifyCall = calls.find((row) => row.purpose === 'safety.classify');
+    expect(replyCall?.promptVersion).toBe(PROMPTS['chat.reply.system'].version);
+    expect(classifyCall?.promptVersion).toBe(PROMPTS['safety.classify.system'].version);
+    expect(replyCall?.promptVersion).not.toBe(classifyCall?.promptVersion);
 
     // SAFE-01 的顺序断言，原样用 RESEARCH §4.1 的那条 SQL。
     const misordered = await ownerSql<{ readonly n: number }[]>`
