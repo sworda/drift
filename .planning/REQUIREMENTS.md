@@ -36,7 +36,7 @@
 ### 安全与危机干预 (SAFE)
 
 - [ ] **SAFE-01**: 安全判定在人格渲染**之后**以确定性覆写方式执行，不作为人格提示词的一部分
-- [ ] **SAFE-02**: 危机判定不得由扮演角色的同一模型执行（人格指令会与安全指令竞争并系统性降低敏感度）
+- [x] **SAFE-02**: 危机判定不得由扮演角色的同一模型执行（人格指令会与安全指令竞争并系统性降低敏感度）
 - [ ] **SAFE-03**: 用户表现出极端情绪时，角色生成情绪安抚与鼓励寻求帮助的内容，**不联络紧急联系人**〔第十三条第一级〕
 - [ ] **SAFE-04**: 用户明确表示自残自杀意图或正面临重大财产损失时，系统提供援助信息并及时联络其监护人或紧急联系人〔第十三条第二级〕
 - [ ] **SAFE-05**: 风险分级为 watch / elevated / crisis 三档，仅 crisis 触发联络通道；分类器失败时 fail-closed 升到 elevated 而非 crisis
@@ -321,7 +321,7 @@
 | COMPLY-10 | Phase 1 | Complete |
 | COMPLY-11 | Phase 1 | Pending |
 | SAFE-01 | Phase 1 | Pending |
-| SAFE-02 | Phase 1 | Pending |
+| SAFE-02 | Phase 1 | Complete |
 | SAFE-03 | Phase 1 | Pending |
 | SAFE-04 | Phase 1 | Pending |
 | SAFE-05 | Phase 1 | Pending |

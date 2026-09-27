@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-15-PLAN.md
-last_updated: "2026-09-27T06:15:46.418Z"
+stopped_at: Completed 01-07-PLAN.md
+last_updated: "2026-09-27T07:23:30.321Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
-state_head: 6357586950a91f14c97f1fd13f15cef8ac0369e9
+state_head: 269be55ae3c6374ca3de4d5db7e12cbd49a5ced4
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 15
-  completed_plans: 7
+  completed_plans: 9
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 ## Current Position
 
 Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 9 of 15
+Plan: 10 of 15
 Status: Ready to execute
 Last activity: 2026-09-26 — Phase 01 execution started
 
@@ -66,6 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P06 | 51 min | 3 tasks | 21 files |
 | Phase 01 P13 | 38 min | 3 tasks | 19 files |
 | Phase 01 P15 | 21 min | 2 tasks | 5 files |
+| Phase 01 P07 | 42 min | 3 tasks | 41 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,12 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: 四条必需句不抄进测试常量，而由 tools/ci/legal-required-sentences.test.ts 在运行时从 01-UI-SPEC.md 的 ## Copywriting Contract 逐行提取；PRIV-10 的 {受托方清单} 占位符按 ROUTES 填充，引导句其余部分逐字不动 — 把句子抄进测试等于制造第二处定义：改 UI-SPEC 时测试不会变红，而「绑定到过时契约的断言在测试全绿时不会被任何人发现」正是 Plan 01 要消灭的失效模式（同 design-tokens.test.ts 的理由）。提取不到对应行即抛错，所以行被改名或删除会立刻变红，而不是退化成一次宽松匹配。
 - [Phase 01]: PRIV-10 受托方清单逐字填入路由表里全部四家（含两家未启用与一家境外的 anthropic），清单的精度由紧随其后的一段正文承担，而不是靠改写引导句 — 验收要求清单集合等于 ROUTES 中 mock 之外的 provider 集合，而引导句字面说的是「会把你和它说的话交给下面这些服务商处理」—— 对尚未启用的 aliyun 与只接收合成文本的 anthropic 而言那句话此刻并不准确。改写引导句会让政策与界面文案分叉（T-15-03）；只列已启用的两家会让集合相等断言变成永远可被「先不启用」绕过的检查。因此引导句一个字不动，紧接一段正文如实写明「目前真正在处理你的话的只有两家」、aliyun 尚未收到任何内容、anthropic 在境外且在类型层就传不进真实原文。
 - [Phase 01]: 「改坏它会变红」这件事写成测试内注入（清空正文、删掉 PRIV-11 必需句两条），而不是执行者手上跑过一次的临时改文件；privacy.md 的 spec 相应改为惰性函数而非模块级常量 — 临时改文件只证明了执行那一刻，之后任何一次回归都无人看见（01-05 的同类处置）。改成注入后每个 PR 都证明一次。spec 必须惰性求值：写成模块级常量时，0 字节的 privacy.md 会让 requiredSentencesFor 在收集阶段抛错，(a) 的「size 大于 0」永远没机会跑，报错信息就成了「找不到引导句前半截」而不是真正的原因。
+- [Phase 01]: 关怀卡片是结构化对象、不经 GatedText、不落 message 表 — 提升成 GatedText 需给 escalated 分支加 text 字段（毁掉「escalated 不带可投递文本」这条类型保证），且会让平台文案以角色消息 + ai_generated 标识落库，而 R1.24 明文禁止覆写内容伪装成角色发言
+- [Phase 01]: 分类器失败封顶在 elevated（既不回落 none 也不升 crisis），即便入站规则层建议 crisis — 决定性判定按 SAFE-01/02 的设计由分类器给出；失败意味着没有决定性判定，此时靠高召回正则发起对第三方的个人信息使用是错的方向
+- [Phase 01]: ContactChannel 做成 GatewayInput 的必填字段 — SAFE-04 的「及时联络」是法定义务，做成可选等于允许调用方在不写任何代码的情况下静默跳过，且没有检查会变红
+- [Phase 01]: contact_attempt 先排超时作业再发 IM 告警 — 反序下「排作业失败」会留下永远停在「正在联系」的无界 pending；此序下多排的作业跑起来只是一次影响 0 行的条件更新
+- [Phase 01]: pg-boss 队列策略用 short 而非默认 standard — 实测纠正 RESEARCH §4.5：standard 下 singletonKey 不去重，同一 key 连排两次得到两个 queued 作业
+- [Phase 01]: 新增必填 env OPERATOR_API_TOKEN（>=32 字符、无默认值） — 运营者端点必须与用户 session 走两条不相交的认证路径；给它默认值等于在生产留一个已知密钥
 
 ### Pending Todos
 
@@ -130,6 +137,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T06:15:46.371Z
-Stopped at: Completed 01-15-PLAN.md
+Last session: 2026-09-27T07:23:30.272Z
+Stopped at: Completed 01-07-PLAN.md
 Resume file: None
