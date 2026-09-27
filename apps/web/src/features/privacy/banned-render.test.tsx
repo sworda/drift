@@ -15,15 +15,20 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { cleanup, render } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { scanBannedTerms } from '@drift/safety';
 
 import { LegalDocPage } from '@/app/(app)/legal/[doc]/page';
+import PrivacyPage from '@/app/(app)/privacy/page';
+import { buildCollectedView, DATA_INVENTORY } from '@drift/db/inventory';
+import type { CollectedView } from '@drift/db/inventory';
+import { CONSENT_SCOPES, type ConsentScope } from '@drift/contract';
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 // jsdom 环境下 import.meta.url 不是 file: URL（01-09 实测），而 vitest 的 cwd 是
@@ -78,5 +83,48 @@ describe('两份法务正文的渲染层禁用词断言（PRIV-06）', () => {
     const { container } = render(<LegalDocPage title="Drift 隐私政策" markdown={PRIVACY_MD} />);
     const offenders = [...container.querySelectorAll('[class*="line-clamp"], [class*="text-ellipsis"], [class*="truncate"]')];
     expect(offenders).toEqual([]);
+  });
+
+  it('隐私中心页（第三个渲染目标）渲染结果的 textContent 无任何规则 1–4 命中', async () => {
+    // 用真实 DATA_INVENTORY 构造 /me/collected 的响应 —— 渲染出来的清单就是用户会看到的。
+    const granted: Record<ConsentScope, boolean> = {
+      basic_service: true,
+      sensitive_pi: true,
+      research_l0: true,
+      research_l1: true,
+      persona_evolution: true,
+    };
+    const view: CollectedView = buildCollectedView(DATA_INVENTORY, granted);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/me/collected')) {
+          return new Response(JSON.stringify(view), { status: 200 });
+        }
+        if (url.endsWith('/me/consents')) {
+          return new Response(
+            JSON.stringify({
+              consents: CONSENT_SCOPES.map((scope) => ({
+                scope,
+                label: scope,
+                description: `${scope} 说明`,
+                required: scope === 'basic_service' || scope === 'sensitive_pi',
+                granted: true,
+              })),
+            }),
+            { status: 200 },
+          );
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+
+    render(<PrivacyPage />);
+    await screen.findByTestId('collected-list');
+    const text = document.body.textContent ?? '';
+    expect(text.length).toBeGreaterThan(200);
+    const hits = scanBannedTerms(text);
+    expect(hits, `渲染命中：${JSON.stringify(hits)}`).toEqual([]);
   });
 });
