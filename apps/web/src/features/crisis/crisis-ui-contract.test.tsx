@@ -113,6 +113,20 @@ describe('(a) 四态联络状态行：全部有渲染分支且文案正确', () 
     const { container } = render(<CareCardLevel2 card={level2Card('pending')} />);
     expect(container.textContent ?? '').toContain(PENDING_NOTE);
   });
+
+  it('四态渲染结果都不含 11 位连续数字（未遮蔽的手机号不出现在界面上）', () => {
+    // 第三方个人信息只能以遮蔽形态出现（T-08-03）—— 号码一旦完整露出，
+    // 泄漏面就从「服务端构造处」扩大到「任何一次渲染」。
+    for (const status of CONTACT_STATUSES) {
+      const { container } = render(<CareCardLevel2 card={level2Card(status)} />);
+      expect(/\d{11}/u.test(container.textContent ?? ''), status).toBe(false);
+      if (status === 'pending' || status === 'delivered') {
+        // 引用号码的两态必须是遮蔽形态；failed / unavailable 的文案不引用号码。
+        expect(container.textContent ?? '').toContain('138****1234');
+      }
+      cleanup();
+    }
+  });
 });
 
 describe('(b) 非 delivered 态不得出现「已经联系」', () => {
