@@ -3,11 +3,11 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-07-PLAN.md
-last_updated: "2026-09-27T07:23:30.321Z"
+stopped_at: Completed 01-09-PLAN.md
+last_updated: "2026-09-27T08:46:03.029Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
-state_head: 269be55ae3c6374ca3de4d5db7e12cbd49a5ced4
+state_head: e0b3e2d958dc364e6a36f7facd4650e8f4d04aab
 progress:
   total_phases: 5
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 ## Current Position
 
 Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 10 of 15
+Plan: 11 of 15
 Status: Ready to execute
 Last activity: 2026-09-26 — Phase 01 execution started
 
@@ -67,6 +67,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P13 | 38 min | 3 tasks | 19 files |
 | Phase 01 P15 | 21 min | 2 tasks | 5 files |
 | Phase 01 P07 | 42 min | 3 tasks | 41 files |
+| Phase 01 P09 | 1h 18m | 3 tasks | 74 files |
 
 ## Accumulated Context
 
@@ -114,6 +115,13 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: contact_attempt 先排超时作业再发 IM 告警 — 反序下「排作业失败」会留下永远停在「正在联系」的无界 pending；此序下多排的作业跑起来只是一次影响 0 行的条件更新
 - [Phase 01]: pg-boss 队列策略用 short 而非默认 standard — 实测纠正 RESEARCH §4.5：standard 下 singletonKey 不去重，同一 key 连排两次得到两个 queued 作业
 - [Phase 01]: 新增必填 env OPERATOR_API_TOKEN（>=32 字符、无默认值） — 运营者端点必须与用户 session 走两条不相交的认证路径；给它默认值等于在生产留一个已知密钥
+- [Phase 01]: better-auth 1.7.6 通过 AsyncLocalStorage + Proxy 参与我们自己的事务，而不是照字面「在事务里调它的 server API」 — 实读 @better-auth/drizzle-adapter 的类型：db 在构造期绑定，适配器没有任何逐调用注入事务的入口（config 的 transaction 只是「让它自己开一个」）。照字面实现会让账号落在另一个连接上，写同意失败时账号留在库里 —— 正是 T-09-02 的残缺账号，与 PLAN 明令禁止依赖 databaseHooks 是同一个失效模式。spike 实测：事务内 signUpEmail 成功、事务内抛错后 user 表零残留
+- [Phase 01]: policy_version 不再接受客户端传入，改为服务端取 apps/web/content/legal/privacy.md 的内容哈希，且无任何兜底分支 — 一个由请求体带进来的版本号等于让用户自己声明「我同意的是哪一版」，而那正是这条留证要回答的问题 —— 可伪造的留证不是留证。默认值 / unknown / try-catch 吞掉都会让每条 consent_event 指向一份不存在的政策文本，那比没有留证更糟，因为它看起来像一份留证。模块加载期 readFileSync，缺失即进程起不来
+- [Phase 01]: 五个 consent scope 的取值与文案、紧急联系人的取值域与手机号判据、isAdult 全部收拢到 @drift/contract — apps/web 不能 import @drift/db（后者加载即读 DATABASE_URL 并构造连接池），而这些取值同时被注册页、注册事务、以及 consent/consent_event 两张表的 CHECK 消费。放在任一侧都会让另外两侧各抄一份，而 scope 是法定披露口径 —— 两份定义就是两份口径，且分叉那天不会有任何检查变红
+- [Phase 01]: 撤回必选同意项与三条留证写入同一事务；入队删除作业失败即整条回滚并返回 503 — 另外两种写法都会让系统在无合法性基础的情况下继续处理个人信息：做成「撤回后继续聊天」的降级只读，或提交撤回但不启动删除。两者在界面上都看起来像成功。回滚是诚实的失败，而 UI-SPEC 的「这项同意没有撤回成功 —— 对应的数据流仍在继续」那一行文案存在的理由正是这个分支
+- [Phase 01]: 五项同意的状态提成纯函数模块（setScope），而不是 PLAN 写的五个独立 useState — 五个独立 useState 能让「点一项其余四项不变」为真，但只能靠肉眼确认 —— 没有任何断言会在有人后来把两个 setState 写到同一个 onChange 里时变红。提成纯函数之后那条性质被穷举证明（5 scope × 2 值 × 2 起点，逐键比对），并带一条注入式非空真证明，且不需要 DOM
+- [Phase 01]: 为统一 drizzle-orm 的 peer 解析上下文，把 kysely 0.29.6 声明进根与 packages/db — better-auth 依赖 kysely，于是 apps/api 与 packages/db 解析到两份不同 peer 后缀的 drizzle-orm 实例，tsc 报出大量 nominal 冲突（SQL / PgColumn 互不兼容）。kysely 本就在依赖树里（better-auth 的传递依赖），显式声明只是让三个 importer 看到同一个 peer 集合；pnpm 不会为未变化的 specifier 重新解析 peer，必须 remove + add 一次 drizzle-orm 才会收敛
+- [Phase 01]: 注册 UI 的渲染断言用 react-dom/server 静态渲染而不是 RTL，两条需要真实 DOM 事件的断言登记为 skip — @testing-library/react 与 jsdom 不在 Plan 02 那次 blocking-human 包合法性核验的 25 包清单里，T-09-SC 禁止本 plan 新增未经核验的包。已向编排器上报请求裁决但未获回复。被 skip 的只有「真实点击后的状态变化」与「焦点落在第一个出错字段」两条；PLAN 里最核心的那条（点一项其余四项不变）强度反而更高 —— 它被穷举证明。01-08/10/11/12/14 的验收里同样写着 RTL 断言，因此这是一次共用的解除条件
 
 ### Pending Todos
 
@@ -128,6 +136,7 @@ None yet.
 - **Phase 5 的 ε/k/位移上限/探针阈值不可靠讨论决定**，必须由 shadow 期数据校准
 - 宿主 glibc 2.28 低于 Next 16 原生 SWC 要求的 GLIBC_2.29：本机无法 next build / next dev，前端开发必须在容器内进行或换宿主（01-03-SUMMARY Issues #1）
 - integration / nightly 两条 workflow 目前必然为红（test:integration / test:probes 无被测对象；nightly 的两个脚本未落地），且三条 workflow 从未真实执行过（仓库无 git remote）—— 阻断规则的另一半是 GitHub 上的 required check 配置，不在仓库文件里
+- **RTL 与 jsdom 未获包合法性批准**（Plan 09 上报，未获回复）—— 01-08 / 01-09 / 01-10 / 01-11 / 01-12 / 01-14 六个 plan 的验收里都写着 RTL 断言，但 `@testing-library/react` / `@testing-library/dom` / `jsdom` 不在 Plan 02 那次 blocking-human 核验的 25 包清单里。01-09 已改用 react-dom/server 静态渲染并登记 `ui-contract-static-render-only`；后续五个 plan 若不解除，会各自再登记一次同样的缺口
 
 ## Deferred Items
 
@@ -137,6 +146,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T07:23:30.272Z
-Stopped at: Completed 01-07-PLAN.md
+Last session: 2026-09-27T08:45:06.858Z
+Stopped at: Completed 01-09-PLAN.md
 Resume file: None
