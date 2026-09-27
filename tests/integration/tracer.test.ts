@@ -28,6 +28,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 process.env['PORT'] = '3001';
 process.env['WEB_ORIGIN'] ??= 'http://127.0.0.1:3000';
 process.env['WECOM_WEBHOOK_URL'] ??= 'https://example.invalid/hook';
+// Plan 07 新增的必填变量（运营者后台端点的共享密钥）。至少 32 字符。
+process.env['OPERATOR_API_TOKEN'] ??= 'tracer-test-operator-token-0123456789abcdef';
 process.env['LLM_PROVIDER_MODE'] = 'mock';
 process.env['LOG_LEVEL'] ??= 'warn';
 
@@ -403,6 +405,9 @@ describe('tracer —— 一条真实消息打穿全链路', () => {
       conversationStatus: 'active',
       recordSafetyEvent: () => {
         throw new Error('这条候选文本不该触发 safety_event');
+      },
+      contactChannel: () => {
+        throw new Error('这条候选文本不该触发联络通道');
       },
     });
     expect(gated.outcome).toBe('gated');

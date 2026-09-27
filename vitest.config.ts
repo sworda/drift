@@ -36,7 +36,14 @@ export default defineConfig({
           // integration（下面）而不是这一层。留在 contract 里会让 ci:fast 在 GitHub
           // 托管 runner 上尝试连数据库 —— 而 fast workflow 的第一条约束就是不依赖
           // 任何数据库或境内资源（掉线时它是仅存的防线）。
-          exclude: ['**/node_modules/**', '**/dist/**', 'tools/ci/schema-drift.test.ts'],
+          // pgboss-delay-api.test.ts 同理：Q5 的锁定测试要真排一个作业再读回来，
+          // 所以它需要真实 PostgreSQL，属 integration。
+          exclude: [
+            '**/node_modules/**',
+            '**/dist/**',
+            'tools/ci/schema-drift.test.ts',
+            'tools/ci/pgboss-delay-api.test.ts',
+          ],
           testTimeout: 10_000,
         },
       },
@@ -45,7 +52,11 @@ export default defineConfig({
           // L5 集成：真实 PG 18.6 + mock provider。
           name: 'integration',
           environment: 'node',
-          include: ['tests/integration/**/*.test.ts', 'tools/ci/schema-drift.test.ts'],
+          include: [
+            'tests/integration/**/*.test.ts',
+            'tools/ci/schema-drift.test.ts',
+            'tools/ci/pgboss-delay-api.test.ts',
+          ],
           testTimeout: 120_000,
           // 每次运行重建一个一次性 drift_test 库并跑 migrate + seed，teardown 时 drop。
           // 负向 fixture 会留下部分写入的行，跑在开发库上会让「上一次的残留」变成

@@ -3,6 +3,7 @@
 // ⚠️ 三张表里只有 session_risk_state 与 contact_attempt 允许 UPDATE。
 // **safety_event 属审计表族**（0001 迁移对 app_role REVOKE UPDATE, DELETE）。
 
+import { sql } from 'drizzle-orm';
 import { boolean, check, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { inValues, newId } from '../sql-helpers.ts';
@@ -110,8 +111,15 @@ export const contactAttempt = pgTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id),
-    /** 加密后的联系方式引用（第三方个人信息）。 */
-    contactRef: text('contact_ref').notNull(),
+    /**
+     * 加密后的联系方式引用（第三方个人信息）。
+     *
+     * 可空，且**只有 unavailable 一态允许为空**（见下方
+     * contact_attempt_contact_ref_required）。「无联系人记录」正是 unavailable 的三个
+     * 成因之一，给它塞一个 '(none)' 之类的哨兵值会让「这一行到底有没有联系方式」
+     * 变成一次字符串比较。
+     */
+    contactRef: text('contact_ref'),
     status: text('status').$type<ContactAttemptStatus>().notNull(),
     alertSentAt: timestamp('alert_sent_at', { withTimezone: true }),
     operatorAckAt: timestamp('operator_ack_at', { withTimezone: true }),
@@ -123,5 +131,29 @@ export const contactAttempt = pgTable(
   (t) => [
     index('contact_attempt_user_id_idx').on(t.userId),
     check('contact_attempt_status_allowed', inValues('status', CONTACT_ATTEMPT_STATUSES)),
+    /**
+     * D-10：`delivered` 的唯一判据是**真人确认已通话**，由 ackDelivered 置入。
+     * 这条约束让「填了 delivered_at 但 status 不是 delivered」在数据库层失败 ——
+     * 而那正是「在非 delivered 态渲染『已经联系了』」这次虚假陈述的数据形态。
+     * 状态**迁移**的合法性由应用层（contact.ts 的条件更新）保证，DB 只兜住终局的
+     * 自相矛盾。
+     */
+    check(
+      'contact_attempt_delivered_at_consistency',
+      sql.raw(`"delivered_at" is null or "status" = 'delivered'`),
+    ),
+    /**
+     * SAFE-16：`pending` 只能在 IM 告警**投递成功**之后进入。没有 alert_sent_at 的
+     * pending 意味着「我们在等一件从未开始的事」，而 UI 会照样渲染「正在联系」。
+     */
+    check(
+      'contact_attempt_pending_requires_alert',
+      sql.raw(`"status" <> 'pending' or "alert_sent_at" is not null`),
+    ),
+    /** 只有 unavailable 允许没有联系方式引用（无联系人记录 / 号码无效）。 */
+    check(
+      'contact_attempt_contact_ref_required',
+      sql.raw(`"contact_ref" is not null or "status" = 'unavailable'`),
+    ),
   ],
 );

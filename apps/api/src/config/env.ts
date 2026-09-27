@@ -25,6 +25,17 @@ const EnvSchema = z.object({
   LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
   /** 企业微信机器人 webhook。Plan 06 的 notifyOperator / Plan 07 的状态机使用，本 plan 只声明。 */
   WECOM_WEBHOOK_URL: z.url({ error: 'WECOM_WEBHOOK_URL 必须是完整 URL' }),
+  /**
+   * 运营者后台的共享密钥（D-09/D-10 的两个人工推进端点）。
+   *
+   * ⚠️ 必填、无默认值、最短 32 字符。它与用户 session 是两条不相交的认证路径 ——
+   * 把运营者动作挂在用户 session 上意味着任何用户都能把别人的联络尝试标成
+   * delivered，而 delivered 会让界面陈述「我们已经联系了」（T-07-05）。
+   * 给它一个默认值等于在生产里留一个已知密钥，所以缺失时进程不启动。
+   */
+  OPERATOR_API_TOKEN: z
+    .string()
+    .min(32, { error: 'OPERATOR_API_TOKEN 至少 32 个字符（运营者端点的共享密钥）' }),
   /** mock = 不出网的假 provider（D-27）；live = 真实调用。默认 mock。 */
   LLM_PROVIDER_MODE: z.enum(['mock', 'live']).default('mock'),
 });

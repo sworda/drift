@@ -32,8 +32,15 @@
 
 import { PgBoss } from 'pg-boss';
 
+import { db } from '@drift/db';
+
 import { env } from '../config/env.ts';
 import { logError, logEvent } from '../obs/logger.ts';
+import {
+  CONTACT_ATTEMPT_TIMEOUT_QUEUE,
+  registerContactAttemptTimeout,
+  setContactAttemptTimeoutScheduler,
+} from './jobs/contact-attempt-timeout.ts';
 
 /** pg-boss 的专属 schema。drizzle 的 schemaFilter 必须排除它。 */
 export const PGBOSS_SCHEMA = 'pgboss';
@@ -64,11 +71,32 @@ export async function startWorker(): Promise<WorkerHandle> {
   // /healthz 的 pgboss 字段就是查这个 schema 里有没有表 —— 所以启动顺序是
   // worker 先起，HTTP 后起，否则第一次 healthcheck 必然是 503。
   await boss.start();
+
+  // contact_attempt 的 10 分钟超时（D-11）。注册的是队列 + 作业体 + 进程级排定器：
+  // 排定动作发生在 HTTP 请求链路里（chat/turn.ts），而 PgBoss 实例由本函数持有。
+  // ⚠️ 排定器未注册时 startContactAttempt 会走 unavailable 分支而不是留一个无界的
+  // pending —— 所以这一步必须在 HTTP 开始服务之前完成，而 apps/api/src/index.ts 的
+  // 启动顺序（worker 先起、HTTP 后起）本来就是这样。
+  await registerContactAttemptTimeout(boss, {
+    executor: db,
+    onExpired: (_attemptId, affected) => {
+      logEvent('contact_attempt.timeout_swept', {
+        jobName: CONTACT_ATTEMPT_TIMEOUT_QUEUE,
+        count: affected,
+        contactAttemptStatus: affected > 0 ? 'failed' : 'pending',
+      });
+    },
+  });
+
   logEvent('worker.started', { phase: PGBOSS_SCHEMA });
 
   return {
     boss,
     stop: async (): Promise<void> => {
+      // 先摘掉排定器：boss 停掉之后再有人排定超时作业，会得到一个「排不上」的错误
+      // 而不是一个静默丢掉的作业 —— 前者让 contact.ts 走 unavailable（有出路的那一
+      // 支），后者会留一个无界的 pending。
+      setContactAttemptTimeoutScheduler(null);
       // graceful: 让在执行中的任务跑完；timeout 是上限。close 默认关连接池。
       await boss.stop({ graceful: true, timeout: 10_000 });
       logEvent('worker.stopped');

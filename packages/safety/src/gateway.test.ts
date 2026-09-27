@@ -11,6 +11,8 @@ import {
   parseClassification,
   safetyGateway,
   type Classification,
+  type ContactAttemptStatus,
+  type ContactChannel,
   type SafetyEventDraft,
 } from './index.ts';
 
@@ -18,6 +20,24 @@ import {
 function forbiddenRecorder(): (draft: SafetyEventDraft) => string {
   return () => {
     throw new Error('这一支不该写 safety_event');
+  };
+}
+
+/**
+ * 被调用即失败的联络通道：用在「这一支不该联络第三方」的用例里。
+ * elevated（含 fail-closed 上来的那一批）全部属于这一类 —— SAFE-03 明文「不联络」。
+ */
+function forbiddenChannel(): ContactChannel {
+  return () => {
+    throw new Error('这一支不该联络紧急联系人（SAFE-03 明文「不联络」）');
+  };
+}
+
+/** 计数式联络通道：crisis 分支用它，断言「恰好被调用一次」。 */
+function countingChannel(calls: string[], status: ContactAttemptStatus = 'pending'): ContactChannel {
+  return (safetyEventId) => {
+    calls.push(safetyEventId);
+    return { status, contactName: '联系人甲', maskedContact: '138****1234' };
   };
 }
 
@@ -52,6 +72,7 @@ describe('SAFE-05：classifierStatus 为 failed 时 level 恒为 elevated', () =
         classification,
         conversationStatus: 'active',
         recordSafetyEvent: capturingRecorder(recorded),
+        contactChannel: forbiddenChannel(),
       });
       expect(result.outcome).toBe('escalated');
       if (result.outcome !== 'escalated') return;
@@ -125,6 +146,7 @@ describe('COMPLY-05：会话 ended ⇒ 拒绝产出 GatedText（fail-closed）',
       classification: { classifierStatus: 'ok', level: 'none' },
       conversationStatus: 'ended',
       recordSafetyEvent: forbiddenRecorder(),
+      contactChannel: forbiddenChannel(),
     });
     expect(result).toEqual({ outcome: 'refused', reason: 'conversation_ended' });
     // 「message 表无新增 sender_kind 为 character 的行」的单元层判据：
@@ -140,6 +162,7 @@ describe('COMPLY-05：会话 ended ⇒ 拒绝产出 GatedText（fail-closed）',
       classification: { classifierStatus: 'ok', level: 'none' },
       conversationStatus: 'active',
       recordSafetyEvent: forbiddenRecorder(),
+      contactChannel: forbiddenChannel(),
     });
     expect(result.outcome).toBe('gated');
     if (result.outcome !== 'gated') return;
@@ -156,6 +179,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
         classification: { classifierStatus: 'ok', level: 'none' },
         conversationStatus: 'active',
         recordSafetyEvent: capturingRecorder(recorded),
+        contactChannel: forbiddenChannel(),
       });
       expect(result.outcome).toBe('refused');
       if (result.outcome !== 'refused') return;
@@ -188,6 +212,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
       classification: { classifierStatus: 'ok', level: 'none' },
       conversationStatus: 'active',
       recordSafetyEvent,
+      contactChannel: forbiddenChannel(),
     });
     expect(result.outcome).toBe('gated');
     expect(recordSafetyEvent).not.toHaveBeenCalled();
@@ -195,17 +220,58 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
 
   it('crisis 胜过挽留拦截 —— 一次真实危机不得被一个文案问题掩盖', async () => {
     const recorded: SafetyEventDraft[] = [];
+    const contacted: string[] = [];
     const result = await safetyGateway({
       candidateText: `${RETENTION_PHRASES[0]}，我们一起想想办法。`,
       classification: { classifierStatus: 'ok', level: 'crisis' },
       conversationStatus: 'active',
       recordSafetyEvent: capturingRecorder(recorded),
+      contactChannel: countingChannel(contacted),
     });
     expect(result.outcome).toBe('escalated');
     if (result.outcome !== 'escalated') return;
     expect(result.level).toBe('crisis');
     expect(result.careCard.level).toBe('level2');
     expect(recorded).toHaveLength(1);
+    // crisis ⇒ 联络通道**恰好**被调用一次，且拿到的 safety_event id 与返回值一致
+    //（contact_attempt 的外键必须指向这次留证）。
+    expect(contacted).toEqual([result.safetyEventId]);
+  });
+
+  it('SAFE-03：elevated 分支**不调**联络通道，且 contact 恒为 null', async () => {
+    const recorded: SafetyEventDraft[] = [];
+    const result = await safetyGateway({
+      candidateText: '嗯，我在听。',
+      classification: { classifierStatus: 'ok', level: 'elevated' },
+      conversationStatus: 'active',
+      // 被调用即抛错。这一条断言的强度全在这里：一个「顺手也联络一下」的实现会直接红。
+      contactChannel: forbiddenChannel(),
+      recordSafetyEvent: capturingRecorder(recorded),
+    });
+    expect(result.outcome).toBe('escalated');
+    if (result.outcome !== 'escalated') return;
+    expect(result.level).toBe('elevated');
+    expect(result.contact).toBeNull();
+    expect(result.careCard.level).toBe('level1');
+  });
+
+  it('crisis 的二级卡片联络状态行 = 通道返回的 status（不是渲染层自己猜的）', async () => {
+    for (const status of ['pending', 'delivered', 'failed', 'unavailable'] as const) {
+      const recorded: SafetyEventDraft[] = [];
+      const result = await safetyGateway({
+        candidateText: '我们一起想想办法。',
+        classification: { classifierStatus: 'ok', level: 'crisis' },
+        conversationStatus: 'active',
+        contactChannel: countingChannel([], status),
+        recordSafetyEvent: capturingRecorder(recorded),
+      });
+      expect(result.outcome).toBe('escalated');
+      if (result.outcome !== 'escalated') continue;
+      if (result.careCard.level !== 'level2') throw new Error('crisis 必须是二级卡片');
+      expect(result.careCard.contactStatus).toBe(status);
+      // T-07-03：只有 delivered 才允许陈述「已经联系了」。
+      expect(result.careCard.claimsContacted).toBe(status === 'delivered');
+    }
   });
 
   it('规则层只能抬升：分类判 none 而规则层建议 elevated ⇒ 最终 elevated', async () => {
@@ -218,6 +284,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
       inboundRuleHits: ['extreme_emotion.cannot_hold_on'],
       previousLevel: 'watch',
       recordSafetyEvent: capturingRecorder(recorded),
+      contactChannel: forbiddenChannel(),
     });
     expect(result.outcome).toBe('escalated');
     if (result.outcome !== 'escalated') return;
@@ -234,6 +301,7 @@ describe('COMPLY-05 / R1.33：挽留话术出站触发率恒为 0', () => {
       classification: { classifierStatus: 'ok', level: 'none' },
       conversationStatus: 'ended',
       recordSafetyEvent: forbiddenRecorder(),
+      contactChannel: forbiddenChannel(),
     });
     expect(result.outcome).toBe('refused');
     if (result.outcome !== 'refused') return;

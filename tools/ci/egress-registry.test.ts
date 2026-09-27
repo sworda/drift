@@ -467,6 +467,9 @@ describe('绑定断言 3：acute 告警载荷不含对话文本（SAFE-16 / T-06
       // （crisis 分支的 contact_attempt 以 safety_event_id 为外键）。这里返回一个
       // 固定 id —— 本条断言的对象是告警载荷，不是落库。
       recordSafetyEvent: () => 'sev_egress_binding',
+      // crisis ⇒ 网关会走联络通道（Plan 07）。本条断言的对象是告警载荷，不是四态，
+      // 所以这里返回一个固定的 unavailable —— 真实的四态推进在 L5。
+      contactChannel: () => ({ status: 'unavailable', contactName: null, maskedContact: null }),
     });
     // ② crisis ⇒ 不产出 GatedText，走 acute 告警这一条出口。
     expect(gated.outcome).toBe('escalated');

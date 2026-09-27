@@ -52,6 +52,8 @@ import {
   scanInbound,
   type CareCard,
   type ClassifyInvoke,
+  type ContactAttemptOutcome,
+  type ContactChannel,
   type RiskLevel,
 } from '@drift/safety';
 import {
@@ -66,8 +68,11 @@ import {
   type MessageProvenance,
 } from '@drift/db';
 
-import { logEvent } from '../../obs/logger.ts';
+import { env } from '../../config/env.ts';
+import { logError, logEvent } from '../../obs/logger.ts';
+import { startContactAttempt } from '../safety/contact.ts';
 import { raiseRisk, readRiskLevel, writeSafetyEvent } from '../safety/state.ts';
+import { requireContactAttemptTimeoutScheduler } from '../../worker/jobs/contact-attempt-timeout.ts';
 import { deliver, publish } from '../../ws/server.ts';
 
 /** 人格渲染带入的最近消息条数。Phase 1 不做检索（记忆系统在 Phase 3）。 */
@@ -96,6 +101,8 @@ export interface TurnResult {
         readonly careCard: CareCard;
         readonly safetyEventId: string;
         readonly riskLevel: RiskLevel;
+        /** 联络尝试。**elevated 恒为 null**（SAFE-03 明文「不联络」）。 */
+        readonly contact: ContactAttemptOutcome | null;
       }
     | { readonly outcome: 'refused'; readonly reason: 'conversation_ended' | 'retention_phrase' };
 }
@@ -113,6 +120,12 @@ export interface TurnResult {
  */
 export interface TurnOverrides {
   readonly classifyInvoke?: ClassifyInvoke;
+  /**
+   * 告警投递的 fetch 实现（tests/integration/contact-attempt.test.ts）。
+   * 与 alert.ts 的 `fetchImpl` 是同一个注入点，只是从这里透传下去 —— 四态的
+   * webhook 200 / 500 两条分支必须在不出网的进程里都可达。
+   */
+  readonly alertFetch?: typeof fetch;
 }
 
 export async function runTurn(
@@ -276,6 +289,13 @@ export async function runTurn(
       inboundRuleHits: inbound.hits,
       previousLevel,
       classifierModelSnapshot: classified.modelSnapshot,
+      // SAFE-04 的联络通道。**只有 crisis 分支会调它**（SAFE-03 明文一级不联络），
+      // 分工在网关里而不是在这里 —— 这里给的只是「怎么联络」。
+      contactChannel: contactChannel({
+        userId: input.userId,
+        conversationId: prepared.conversation.id,
+        alertFetch: overrides?.alertFetch,
+      }),
       recordSafetyEvent: async (draft) =>
         tx(async (t) => {
           const safetyEventId = await writeSafetyEvent(t, draft, {
@@ -306,6 +326,7 @@ export async function runTurn(
           conversationId: prepared.conversation.id,
           riskLevel: gated.level,
           modelSnapshot: classified.modelSnapshot,
+          contactAttemptStatus: gated.contact?.status ?? null,
         },
         'warn',
       );
@@ -318,6 +339,7 @@ export async function runTurn(
           careCard: gated.careCard,
           safetyEventId: gated.safetyEventId,
           riskLevel: gated.level,
+          contact: gated.contact,
         },
       };
     }
@@ -386,4 +408,66 @@ export async function runTurn(
       payload: { conversationId: prepared.conversation.id },
     });
   }
+}
+
+/**
+ * 构造联络通道（SAFE-04 / SAFE-16）。
+ *
+ * ⚠️ 这里有一个 catch，它**不是** T-07-01 那条被禁止的路径：它把一次联络失败降级为
+ * `unavailable`（一个有出路的终态：UI-SPEC 要求此时把「拨打 12356」提到卡片首屏第一
+ * 行），而**不是**降级为下发人格回复 —— 这个 catch 的作用域里既没有 deliver 也没有
+ * insertCharacterMessage，也拿不到候选回复。
+ *
+ * 为什么必须兜住：联络失败不能连带把关怀卡片丢掉。二级危机里用户最需要的是那张带
+ * 号码的卡片，而一次 webhook 超时把整个请求变成 500 会让他什么也拿不到。
+ */
+function contactChannel(ctx: {
+  readonly userId: string;
+  readonly conversationId: string;
+  readonly alertFetch?: typeof fetch | undefined;
+}): ContactChannel {
+  return async (safetyEventId) => {
+    try {
+      const result = await startContactAttempt(
+        db,
+        { safetyEventId, userId: ctx.userId, conversationId: ctx.conversationId },
+        {
+          transport: {
+            webhookUrl: env.WECOM_WEBHOOK_URL,
+            ...(ctx.alertFetch === undefined ? {} : { fetchImpl: ctx.alertFetch }),
+          },
+          // ⚠️ **延迟解析**排定器，而不是在构造 deps 时就解析：未注册时
+          // requireContactAttemptTimeoutScheduler() 会抛错，而在这里抛就会让整个
+          // contactChannel 落进下面那个 catch —— 结果是**一行 contact_attempt 都没有**，
+          // 即一次联络尝试失败却没有任何留证。延迟到调用点抛，则由
+          // startContactAttempt 的 timeout_not_schedulable 分支如实插一行 unavailable。
+          scheduleTimeout: async (attemptId) => {
+            await requireContactAttemptTimeoutScheduler()(attemptId);
+          },
+          onEvent: (event) => {
+            logEvent(event.name, {
+              userId: ctx.userId,
+              conversationId: ctx.conversationId,
+              contactAttemptStatus: event.status,
+              errorCode: event.reason,
+            });
+          },
+        },
+      );
+      return {
+        status: result.status,
+        contactName: result.contactName,
+        maskedContact: result.maskedContact,
+      };
+    } catch (error) {
+      // 没有可用通道 —— 包括「超时作业排不上」这一类：一个排不上超时的 pending 是
+      // 无界的，而 UI-SPEC 明文 pending 必须有界。
+      logError('contact_attempt.start_failed', error, {
+        userId: ctx.userId,
+        conversationId: ctx.conversationId,
+        contactAttemptStatus: 'unavailable',
+      });
+      return { status: 'unavailable', contactName: null, maskedContact: null };
+    }
+  };
 }

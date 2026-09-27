@@ -46,7 +46,12 @@ import { createHash } from 'node:crypto';
 
 import type { GatedText } from '@drift/contract';
 
-import { buildCareCard, type CareCard, type CareCardLevel2Context, type HelpResource } from './care-cards.ts';
+import {
+  buildCareCard,
+  type CareCard,
+  type ContactAttemptStatus,
+  type HelpResource,
+} from './care-cards.ts';
 import { hitsRetentionPhrase, type RetentionPhrase } from './retention-words.ts';
 import {
   isEscalatedLevel,
@@ -95,6 +100,29 @@ export interface SafetyEventDraft {
  */
 export type SafetyEventRecorder = (draft: SafetyEventDraft) => string | Promise<string>;
 
+/** 一次联络尝试的结果，用来填二级卡片的联络状态行。 */
+export interface ContactAttemptOutcome {
+  readonly status: ContactAttemptStatus;
+  readonly contactName: string | null;
+  /** 遮蔽后的联系方式（138****1234）。拿不到时为 null，渲染层必须容忍。 */
+  readonly maskedContact: string | null;
+}
+
+/**
+ * 联络通道端口 —— **crisis 分支必经**。
+ *
+ * ⚠️ 它是 GatewayInput 的**必填**字段，而不是可选项。理由是义务的方向：SAFE-04 的
+ * 「及时联络」是法定要求，把它做成可选等于允许一个调用方在不写任何代码的情况下
+ * 静默跳过它，而没有任何检查会变红。crisis 分支调它、elevated 分支不调（SAFE-03
+ * 明文「不联络」），这个分工在下面的代码里，而不是在调用方的自觉里。
+ *
+ * 它返回的 status 直接决定二级卡片的联络状态行，因此「界面上说的」与「数据库里的」
+ * 在结构上是同一个值 —— T-07-03 的那次虚假陈述没有插入的位置。
+ */
+export type ContactChannel = (
+  safetyEventId: string,
+) => ContactAttemptOutcome | Promise<ContactAttemptOutcome>;
+
 export interface GatewayInput {
   readonly candidateText: string;
   readonly classification: Classification;
@@ -104,6 +132,11 @@ export interface GatewayInput {
    */
   readonly conversationStatus: 'active' | 'ended';
   readonly recordSafetyEvent: SafetyEventRecorder;
+  /**
+   * 联络通道。**crisis 分支必经**，elevated 分支不会被调用（SAFE-03「不联络」）。
+   * 必填 —— 见 ContactChannel 的说明。
+   */
+  readonly contactChannel: ContactChannel;
   /** 入站规则层的建议等级。省略 = 'none'（规则层没命中）。**只能抬升。** */
   readonly inboundSuggestedLevel?: RiskLevel;
   /** 入站规则层命中的规则 id。进 safety_event.rule_hits。 */
@@ -112,13 +145,8 @@ export interface GatewayInput {
   readonly previousLevel?: RiskLevel;
   /** 执行判定的模型快照。省略 = null（分类器在拿到回包之前就失败了）。 */
   readonly classifierModelSnapshot?: string | null;
-  /** 二级卡片的联络状态与联系人展示信息。crisis 分支必需之外的字段可省。 */
-  readonly careContext?: {
-    readonly resources?: readonly HelpResource[];
-    readonly contactStatus?: CareCardLevel2Context['contactStatus'];
-    readonly contactName?: string | null;
-    readonly maskedContact?: string | null;
-  };
+/** 援助资源清单。省略或为空 ⇒ care-cards.ts 的 12356/120 兜底清单（fail-closed）。 */
+  readonly helpResources?: readonly HelpResource[];
 }
 
 export type GatedResult =
@@ -139,6 +167,11 @@ export type GatedResult =
       /** 本次覆写留证行的 id。crisis 分支的 contact_attempt 以它为外键。 */
       readonly safetyEventId: string;
       readonly ruleHits: readonly string[];
+      /**
+       * 联络尝试的结果。**elevated 恒为 null** —— SAFE-03 明文「不联络」，而
+       * null 就是那条约束在返回值上的形态（不是「联络了但状态未知」）。
+       */
+      readonly contact: ContactAttemptOutcome | null;
     }
   | {
       readonly outcome: 'refused';
@@ -200,16 +233,23 @@ export async function safetyGateway(input: GatewayInput): Promise<GatedResult> {
     // ⚠️ elevated（含分类器故障 fail-closed 上来的那一批）一律是**一级**卡片：
     // 它在类型上就没有 contactStatus，于是 SAFE-03 的「不联络」在渲染层也无从违反。
     // UI-SPEC 明文要求故障时的界面与一级完全相同 —— 用户不该看到「系统出错了」。
-    const resources = input.careContext?.resources;
+    const resources = input.helpResources;
+    let contact: ContactAttemptOutcome | null = null;
+    if (level === 'crisis') {
+      // SAFE-04：只有 crisis 走联络通道。它**在卡片构造之前**执行，于是卡片上写的
+      // 联络状态与数据库里那一行是同一个值 —— 而不是「先渲染 pending，拿到结果再
+      // 翻成失败」那种没有根据的安抚（UI-SPEC〔法定〕明文禁止）。
+      contact = await input.contactChannel(safetyEventId);
+    }
     const careCard: CareCard =
-      level === 'crisis'
-        ? buildCareCard('level2', {
+      contact === null
+        ? buildCareCard('level1', resources === undefined ? {} : { resources })
+        : buildCareCard('level2', {
             ...(resources === undefined ? {} : { resources }),
-            contactStatus: input.careContext?.contactStatus ?? 'unavailable',
-            contactName: input.careContext?.contactName ?? null,
-            maskedContact: input.careContext?.maskedContact ?? null,
-          })
-        : buildCareCard('level1', resources === undefined ? {} : { resources });
+            contactStatus: contact.status,
+            contactName: contact.contactName,
+            maskedContact: contact.maskedContact,
+          });
 
     return {
       outcome: 'escalated',
@@ -219,6 +259,7 @@ export async function safetyGateway(input: GatewayInput): Promise<GatedResult> {
       careCard,
       safetyEventId,
       ruleHits,
+      contact,
     };
   }
 

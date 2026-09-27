@@ -148,6 +148,32 @@ describe.each(INJECTIONS.map(([label]) => label))('分类器失败「%s」', (la
   });
 });
 
+describe('非空真对照：contact_attempt 那条断言不是空真的', () => {
+  it('同一套装置下，一条命中入站规则的二级危机消息**会**产生一行 contact_attempt', async () => {
+    // ⚠️ 上面四组用例里的「contact_attempt 无新增行」如果没有这一条正向对照，就是
+    // 空真的：一个根本没有联络实现的分支同样满足它。这一条证明装置本身能产生行。
+    const seeded = await seedConversation('fail-closed-contact-control');
+    const result = await runTurn(
+      {
+        conversationId: seeded.conversationId,
+        userId: seeded.userId,
+        text: '我真的不想活了，今天就想结束自己的生命。',
+      },
+      // 没有 emergency_contact 记录 ⇒ 这一行会是 unavailable；但它**存在**，
+      // 而这正是本条对照要证明的东西。
+      {},
+    );
+    expect(result.reply.outcome).toBe('escalated');
+    if (result.reply.outcome !== 'escalated') return;
+    expect(result.reply.level).toBe('crisis');
+    const rows = await db
+      .select({ status: contactAttempt.status })
+      .from(contactAttempt)
+      .where(eq(contactAttempt.userId, seeded.userId));
+    expect(rows, 'crisis 路径必须产生一行 contact_attempt').toHaveLength(1);
+  });
+});
+
 describe('非空真对照：同一条中性消息在分类器正常时是 gated', () => {
   it('不注入故障 ⇒ outcome 为 gated 且角色消息落库', async () => {
     const seeded = await seedConversation('fail-closed-control');

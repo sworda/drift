@@ -9,6 +9,7 @@ import { authRoutes } from '../modules/auth/routes.ts';
 import { characterRoutes } from '../modules/characters/routes.ts';
 import { chatRoutes } from '../modules/chat/routes.ts';
 import { friendshipRoutes } from '../modules/friendship/routes.ts';
+import { operatorSafetyRoutes } from '../modules/safety/routes.ts';
 import { logEvent } from '../obs/logger.ts';
 import { HEALTH_PATH, healthRoutes } from './health.ts';
 
@@ -44,6 +45,9 @@ export function createApp(): Hono {
   app.route('/', characterRoutes);
   app.route('/', friendshipRoutes);
   app.route('/', chatRoutes);
+  // 运营者后台（D-09/D-10）。认证与用户 session **完全分离**（x-operator-token），
+  // 见 modules/safety/routes.ts 的文件头。
+  app.route('/', operatorSafetyRoutes);
 
   app.post(
     '/telemetry/error',
