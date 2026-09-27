@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-04-PLAN.md
-last_updated: "2026-09-26T13:49:57.234Z"
+stopped_at: Completed 01-05-PLAN.md
+last_updated: "2026-09-27T03:40:37.774Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
-state_head: ef55d6d2775a08c94dcc3515456fc5faca88880d
+state_head: 4c04bcf39081b47248d431847865080883218215
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 15
-  completed_plans: 3
+  completed_plans: 5
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 ## Current Position
 
 Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 5 of 15
+Plan: 6 of 15
 Status: Ready to execute
 Last activity: 2026-09-26 — Phase 01 execution started
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P02 | 1h 1m | 3 tasks | 33 files |
 | Phase 01 P03 | 1h 22m | 3 tasks | 45 files |
 | Phase 01 P04 | 21 min | 3 tasks | 77 files |
+| Phase 01 P05 | 30 min | 3 tasks | 35 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,11 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: drizzle-kit check 不连数据库，不能当漂移门禁；真正的门禁是 packages/db/scripts/assert-no-drift.mjs（drizzle-kit push + 断言 No changes detected 且输出无 pgboss）。 — 实测 check 在库与 schema 明显不一致时仍输出 Everything is fine 并退出 0。为了让「零漂移」可达，同时去掉了表达式 id 默认值与命名复合主键两处 drizzle-kit 往返噪声。
 - [Phase 01]: llm_call 按每次 provider 调用各自短事务落库，不横跨 provider 网络调用；角色消息另起短事务。 — 崩溃只可能留下「有 llm_call、没有消息」（安全方向），反向由调用顺序排除。横跨网络调用的事务会把连接池上限直接变成并发上限。
 - [Phase 01]: 不引入 @shadcn/react（message-scroller 的依赖）；chat-view 只用 bubble + message 两个原语加本地滚动锚定。 — UI-SPEC v1 明确不做虚拟滚动，该包唯一难自行实现的能力用不到；T-04-SC 禁止新增未经核验的包，而「脚手架顺手拉进来」正是它要拦的失效模式。
+- [Phase 01]: 境外通道 chat.reply.frontier 从 CallMode 中整个移除，唯一入口是 callFrontier(readonly SyntheticText[]) — RESEARCH §5.1 只把 persona.probe 排除在 routed 之外。但「真实用户原文误发境外 provider」被 PITFALLS 列为 HIGH 且不可逆（发出即已出境），运行时判断与代码评审都来不及。把 frontier 也移出 CallMode 之后，境外通道在类型层只能接受合成文本，负向 type fixture（probe-routed.ts）证明普通 string 传不进去。
+- [Phase 01]: LLM host 白名单拆成境内（ALLOWED_LLM_HOSTS）与仅合成（SYNTHETIC_ONLY_HOSTS）两张互斥表，另加已知网关黑名单 DENIED_LLM_HOSTS — 单张白名单不可同时满足 PLAT-06（真实对话只走境内 host）与 PLAT-07 + PLAT-05（必须存在一个境外的 frontier 条目且不得留空洞）。照字面实现只有两种结果：把境外 host 放进境内白名单（把 T-05-01 降级成一次代码评审），或给 frontier 填一个假 baseURL（配置与它声明的模型不自洽）。分成两张互斥表后，断言按角色分类判定，且两张表都不得与网关黑名单相交。
+- [Phase 01]: prompt_version 取系统提示词的内容哈希，不取拼装后整段文本的哈希 — 01-04 用整段文本（含人格小传与本轮用户消息）的哈希做 version，于是每一行 llm_call 的 prompt_version 都不相同 —— 「当时生效的是哪一版提示词」这个问题反而答不出来，而那正是 PLAT-08 存在的理由。人格侧版本由 persona_version_id 负责，逐轮输入的同一性由 input_hash 负责，三者分工不重叠。
+- [Phase 01]: glm-4.7-flash 的可 pin 性如实标成 alias-only（Q4），并在 SKIPPED_CHECKS.md 登记为一次检查强度降级 — 01-04 的 PINNABLE 里该模型是未核实的 snapshot。STACK §15.9 明确未找到带日期的快照 ID（Confidence MEDIUM）。标错的后果是 safety.classify 被厂商静默换掉而探针通过率的变化被归因错。三层处理：pinned 模式拒绝启动、routed 模式要求书面 aliasOnlyWaiver、nightly 的 resolved_model 日 diff 连续采样。
+- [Phase 01]: 真实 provider 实例用 fetch 直连 git 写死的 baseURL，暂不引入 ai / @ai-sdk/* — 仓库里没有安装任何 provider SDK，而安装它是一次阻断式人工包合法性确认（Plan 02 协议）；Phase 1 的 LLM_PROVIDER_MODE 默认 mock。方向上直连也更强：PLAT-06 怕的是 AI SDK 字符串 model 写法默认路由到境外 AI Gateway，而直连一个写死的 baseURL 结构上没有这个形态。接 live 时再走一次 checkpoint 引入 AI SDK，届时 providers/openai-compatible.ts 是唯一需要替换的实现。
 
 ### Pending Todos
 
@@ -109,6 +115,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-26T13:49:01.772Z
-Stopped at: Completed 01-04-PLAN.md
+Last session: 2026-09-27T03:38:02.856Z
+Stopped at: Completed 01-05-PLAN.md
 Resume file: None

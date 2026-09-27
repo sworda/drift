@@ -157,12 +157,12 @@
 
 - [x] **PLAT-01**: 单 pnpm workspace，两个部署单元：`apps/web`（仅 UI）与 `apps/api`（REST + WebSocket + pg-boss worker）
 - [x] **PLAT-02**: 单 PostgreSQL 18.6 同时承载 OLTP + pgvector 0.8.6（`halfvec(1024)` + HNSW 余弦）+ pg-boss 12.34 队列
-- [ ] **PLAT-03**: 所有 LLM 调用必经 Model Router；模型可 pin 性维护为**显式表**，不以命名规则推断
+- [x] **PLAT-03**: 所有 LLM 调用必经 Model Router；模型可 pin 性维护为**显式表**，不以命名规则推断
 - [ ] **PLAT-04**: Model Router 支持「按快照名强制路由、禁止别名解析」的调用模式，供 DRIFT-02 对照臂使用
-- [ ] **PLAT-05**: 5 个语义模型角色各自独立配置：`chat.reply`、`chat.reply.frontier`、`persona.reflect`、`persona.probe`、`memory.extract`/`safety.classify`
+- [x] **PLAT-05**: 5 个语义模型角色各自独立配置：`chat.reply`、`chat.reply.frontier`、`persona.reflect`、`persona.probe`、`memory.extract`/`safety.classify`
 - [ ] **PLAT-06**: 存在 ESLint 规则禁止 AI SDK 的 `model: "provider/name"` 字符串写法〔该写法默认路由到境外 AI Gateway，照官方文档抄即构成数据出境〕
-- [ ] **PLAT-07**: 海外模型通道**只接受 synthetic 输入**，真实用户对话不得流向境外
-- [ ] **PLAT-08**: 提示词真相源在 git 中，不托管于可观测性平台
+- [x] **PLAT-07**: 海外模型通道**只接受 synthetic 输入**，真实用户对话不得流向境外
+- [x] **PLAT-08**: 提示词真相源在 git 中，不托管于可观测性平台
 - [ ] **PLAT-09**: 提示缓存前缀逐 token 稳定，禁止在 system 或人格档案位置插入时间戳等变动内容〔缓存命中价为输入价 1/5〕
 - [ ] **PLAT-10**: 单次请求上下文预算上限 28k token〔doubao-seed-character 在 32k 处输出单价从 ¥2 跳至 ¥6，档位边界是悬崖不是斜坡〕
 - [ ] **PLAT-11**: 成本按语义角色（purpose）维度拆解可观测，而非只有总额
@@ -415,12 +415,12 @@
 | EVAL-07 | Phase 2 | Pending |
 | PLAT-01 | Phase 1 | Complete |
 | PLAT-02 | Phase 1 | Complete |
-| PLAT-03 | Phase 1 | Pending |
+| PLAT-03 | Phase 1 | Complete |
 | PLAT-04 | Phase 2 | Pending |
-| PLAT-05 | Phase 1 | Pending |
+| PLAT-05 | Phase 1 | Complete |
 | PLAT-06 | Phase 1 | Pending |
-| PLAT-07 | Phase 1 | Pending |
-| PLAT-08 | Phase 1 | Pending |
+| PLAT-07 | Phase 1 | Complete |
+| PLAT-08 | Phase 1 | Complete |
 | PLAT-09 | Phase 2 | Pending |
 | PLAT-10 | Phase 2 | Pending |
 | PLAT-11 | Phase 2 | Pending |
