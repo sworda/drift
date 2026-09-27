@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-11-PLAN.md
-last_updated: "2026-09-27T12:58:52.084Z"
+stopped_at: Completed 01-12-PLAN.md
+last_updated: "2026-09-27T17:57:17.222Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
-state_head: dbdc9f0ff3faf2207417a413babe62a3a22f0764
+state_head: 0c8cd8590a45c5dd9f0999bab7487a2b5babcbee
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 ## Current Position
 
 Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 12 of 15
+Plan: 13 of 15
 Status: Ready to execute
 Last activity: 2026-09-26 — Phase 01 execution started
 
@@ -72,6 +72,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P10 | 1h 35m | 3 tasks | 21 files |
 | Phase 01 P11 | 2h 30m | 3 tasks | 39 files |
 | Phase 01 P10 | 1h 35m | 3 tasks | 21 files |
+| Phase 01 P12 | 55 min | 3 tasks | 30 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,7 @@ Progress: [░░░░░░░░░░] 0%
   - "回执在账号删除后经 GET /privacy-receipts/:actionId?token= 读取 —— session 已随账号消失，一次性回执凭证（122 位随机，POST /me/delete 响应发放）是「已删除用户仍能拿到回执」的唯一诚实形态；错 token 返回 404 不披露存在性"
   - "导出管道的 GatedText 接缝：gatedFromStoredCharacterMessage（disclosure 留证 → 恢复，不产生）是全仓第二处受控 as GatedText，egress-registry 的断言修订为「恰好两处」—— 强度不变，任何第三处仍然红"
   - "retention-cleanup 的清理规则由 DATA_INVENTORY 的 retention 字段派生（buildRetentionRules 纯函数），源码无第二份期限清单；导出文件 7 天 TTL 委托给 export-artifact-gc（cron 0 5 * * *），retention-cleanup 错峰 45 18 * * *（均为 UTC）"
+- [Phase 01]: Plan 12：计时/依赖/退出三个合规机制落地 —— usage_segment 按 user_id 归集 + pg-boss 到点作业（COMPLY-03）；三阈值纯函数 + 日扫 + 72h 去重（COMPLY-04）；两档整句锚定退出过滤器 + 零出站在网关/worker/落库事务三处执行（COMPLY-05） — rule_id 用 DB CHECK 的取值域而非 PLAN 字面（写 PLAN 的值插不进 dependency_signal）；网关 conversationStatus 改 readConversationStatus 端口（状态在网关内部最后一刻读，调用方传不了过期值）；Phase 1 无会话级延迟投递队列，取消做成必填端口 + 注册表（Phase 2 接入不改 executeHardExit），零出站由 worker 事务内重读兜底
 
 ### Pending Todos
 
@@ -160,6 +162,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T12:58:52.033Z
-Stopped at: Completed 01-10-PLAN.md
+Last session: 2026-09-27T17:57:03.143Z
+Stopped at: Completed 01-12-PLAN.md
 Resume file: None
