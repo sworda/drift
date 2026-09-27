@@ -41,6 +41,9 @@ export default defineConfig({
             'apps/**/src/**/*.test.ts',
             'apps/**/src/**/*.test.tsx',
           ],
+          // jsdom 缺失的浏览器 API（ResizeObserver 等）。带守卫，只在缺失时补，
+          // 因此对 node 环境的单元测试是无害的（见该文件的说明）。
+          setupFiles: ['./tools/ci/vitest-jsdom-setup.ts'],
           testTimeout: 10_000,
         },
       },

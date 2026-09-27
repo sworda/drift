@@ -297,9 +297,17 @@ export function OnboardingSteps({
             </Button>
           ) : null}
           {step < 2 ? (
+            // ⚠️ 紧急联系人那一步的「下一步」**不禁用**，这是刻意的：UI-SPEC 为这一步
+            // 定了一条专门的错误文案（「这个联系方式我们没法识别，请填写 11 位手机号……」）
+            // 并要求把焦点移到第一个出错字段。如果按钮在格式不通过时是 disabled，那条
+            // 文案与那次焦点移动**永远不可达** —— 一条到不了的法定告知比一个多余的禁用态
+            // 更糟。第一步仍然禁用：它没有对应的错误文案，空字段本身就是可见的。
+            //
+            // 「未完成不得提交」这条契约指的是**主 CTA**（下面那个，由两项必选同意把关），
+            // 不是每个中间步骤的翻页按钮。
             <Button
               type="button"
-              disabled={step === 0 ? !accountComplete : !contactComplete}
+              disabled={step === 0 ? !accountComplete : false}
               onClick={() => {
                 if (step === 1 && !contactComplete) {
                   setShowContactErrors(true);

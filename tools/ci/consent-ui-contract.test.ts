@@ -160,6 +160,57 @@ describe('apps/web 的代码里没有「全选」，也没有任何批量 setter
   });
 });
 
+describe('PLAN Task 3 的七条 RTL 断言逐条在场（覆盖元测试）', () => {
+  /**
+   * 这一条防的是「加了第七条但只测了六处」。
+   *
+   * 七条断言的实现在 `apps/web/src/features/onboarding/register-render.test.tsx`
+   * —— 它必须住在 apps/web 下，因为 react 只装在 `apps/web/node_modules` 里，从
+   * tools/ci 解析不到。本文件因此承担「索引」的角色：断言那七条各有一个 describe。
+   */
+  const RTL_FILE = 'features/onboarding/register-render.test.tsx';
+  const rtl = readFileSync(join(WEB_SRC, RTL_FILE), 'utf8');
+
+  /**
+   * ⚠️ 这个串必须拼出来，**不能**写成字面量。
+   *
+   * vitest 用一条正则在**整个文件**里找 `@vitest-environment <name>` 来决定环境，
+   * 不只看首个注释块。把它写成字面量会让**本文件**也被切到 jsdom，而 jsdom 环境下
+   * `import.meta.url` 不是 file: —— 于是顶部那几行 `fileURLToPath` 直接抛
+   * 「The URL must be of scheme file」，整个文件 0 test（本 plan 实测踩到）。
+   */
+  const ENV_DOCBLOCK = `@vitest-${'environment'} jsdom`;
+
+  it('RTL 断言文件在场，且跑在 jsdom 环境里', () => {
+    expect(rtl.length).toBeGreaterThan(1000);
+    expect(rtl).toContain(ENV_DOCBLOCK);
+    expect(rtl).toContain("from '@testing-library/react'");
+    // 只用 fireEvent：user-event 不在那次包合法性 checkpoint 批准的三个包里。
+    // 判的是 import 语句而不是子串 —— 文件头要能写出「为什么不用它」。
+    expect(codeOf(join(WEB_SRC, RTL_FILE))).not.toMatch(/@testing-library\/user-event/u);
+  });
+
+  it.each(['(a)', '(b)', '(c)', '(d)', '(e)', '(f)', '(g)'])(
+    '%s 有一个对应的 describe',
+    (marker) => {
+      expect(
+        rtl.includes(`describe('${marker}`),
+        `register-render.test.tsx 里找不到 ${marker} 的 describe`,
+      ).toBe(true);
+    },
+  );
+
+  it('真实点击与焦点断言都在场（这两条是 RTL 不可被静态渲染替代的部分）', () => {
+    expect(rtl).toContain('fireEvent.click');
+    expect(rtl).toContain('document.activeElement');
+  });
+
+  it('「点一项其余四项不变」的穷举版本仍然保留（与 RTL 互补，不是替代）', () => {
+    const pure = readFileSync(join(WEB_SRC, 'features/onboarding/consent-state.test.ts'), 'utf8');
+    expect(pure).toContain('改 %s 时其余四项逐键不变');
+  });
+});
+
 describe('视觉锚点：28px 在 apps/web 的源码里只出现一处', () => {
   it('text-[28px] 只在 steps.tsx 的 STEP_TITLE_CLASS 里', () => {
     const hits = PRODUCTION_FILES.filter(
