@@ -9,7 +9,8 @@
 // ⚠️ (c)(d) 用**注入的** enqueue 而不是 mock 模块：revokeConsent 的 deps 参数就是为此
 // 存在的。模块 mock 会连带把「入队与撤回同事务」这条性质一起 mock 掉。
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { PgBoss } from 'pg-boss';
 
 process.env['PORT'] = '3001';
 process.env['WEB_ORIGIN'] ??= 'http://127.0.0.1:3000';
@@ -26,8 +27,9 @@ const { fileURLToPath } = await import('node:url');
 const { and, eq } = await import('drizzle-orm');
 
 const {
-  AccountDeletionNotImplementedError,
-  enqueueAccountDeletion,
+  ACCOUNT_DELETION_QUEUE,
+  ensurePgbossGrants,
+  setAccountDeletionScheduler,
 } = await import('../../apps/api/src/worker/jobs/account-deletion.ts');
 const { listConsents, revokeConsent } = await import(
   '../../apps/api/src/modules/consent/service.ts'
@@ -51,9 +53,10 @@ const SERVICE_SOURCE = readFileSync(
   'utf8',
 );
 
-/** 一个总是成功的入队器。返回值是作业 id。 */
+/** 一个总是成功的入队器。返回值是作业 id（(a)(c) 用注入取代真实 boss）。 */
+type SpyEnqueue = (executor: unknown, userId: string, options: { reason: string }) => Promise<string>;
 function spyEnqueue(): {
-  readonly fn: typeof enqueueAccountDeletion;
+  readonly fn: SpyEnqueue;
   readonly calls: { userId: string; reason: string }[];
 } {
   const calls: { userId: string; reason: string }[] = [];
@@ -81,9 +84,29 @@ async function countEvents(userId: string): Promise<{ events: number; actions: n
 }
 
 afterAll(async () => {
+  setAccountDeletionScheduler(null);
+  await ticketBoss?.stop({ graceful: false, timeout: 5_000 });
   await closeDb();
   await ownerSql.end({ timeout: 5 });
 });
+
+/** (d) 的真实入队需要一个真 boss：队列存在（send 对不存在的队列直接失败）+
+ * pgboss 表的跨角色授权（撤回事务以 app_role 连接 INSERT pgboss.job）。 */
+let ticketBoss: PgBoss | null = null;
+beforeAll(async () => {
+  const { PgBoss: Boss } = await import('pg-boss');
+  ticketBoss = new Boss({
+    connectionString:
+      (process.env['DRIFT_TEST_DATABASE_URL'] ?? process.env['DATABASE_URL']) as string,
+    schema: 'pgboss',
+    max: 2,
+  });
+  ticketBoss.on('error', () => undefined);
+  await ticketBoss.start();
+  await ticketBoss.createQueue(ACCOUNT_DELETION_QUEUE, { policy: 'short' });
+  await ensurePgbossGrants(ownerSql);
+  setAccountDeletionScheduler(ticketBoss);
+}, 120_000);
 
 describe('ConsentTicket 守卫（Plan 09 Task 2）', () => {
   it('(a) 撤回 sensitive_pi 之后 insertUserMessage 抛错', async () => {
@@ -161,27 +184,42 @@ describe('ConsentTicket 守卫（Plan 09 Task 2）', () => {
     expect(result.deletionJobId).not.toBeNull();
   });
 
-  it('(d) 入队失败 ⇒ 整条撤回回滚，不存在「撤回了但没进删除」的中间态', async () => {
+  it('(d) 撤回必选项成功且删除作业真的入队（Plan 11 的真实实现，SKIPPED 解除条件）', async () => {
     const seeded = await seedConversation('ticket-d');
     const before = await countEvents(seeded.userId);
 
-    // 默认入队器就是 Plan 11 之前那个抛 not-implemented 的实现。
-    await expect(revokeConsent(seeded.userId, 'sensitive_pi')).rejects.toThrow(
-      AccountDeletionNotImplementedError,
-    );
+    // 默认入队器是 Plan 11 的真实实现（boss 已在 beforeAll 注册）。
+    const result = await revokeConsent(seeded.userId, 'sensitive_pi');
+    expect(result.enteredDeletion).toBe(true);
+    expect(result.deletionJobId).toBeTruthy();
 
+    // 撤回成功 + 删除作业真的进了队列（findJobs 直读 pgboss）。
+    const jobs = await ticketBoss?.findJobs<{ actionId: string }>(ACCOUNT_DELETION_QUEUE, {
+      key: seeded.userId,
+      queued: true,
+    });
+    expect(jobs).toHaveLength(1);
+    const jobData = jobs?.[0]?.data as { actionId: string } | undefined;
+    expect(jobData?.actionId).toBeTruthy();
+
+    // 撤回留证：consent_event 一行 + privacy_action 两行（revoke 的留证 + 删除动作的
+    // pending 行 —— 真实入队自带的那一行，它就是 worker 要读的载体）。
+    const after = await countEvents(seeded.userId);
+    expect(after.events).toBe(before.events + 1);
+    expect(after.actions).toBe(before.actions + 2);
     const rows = await db
       .select({ granted: consent.granted })
       .from(consent)
       .where(and(eq(consent.userId, seeded.userId), eq(consent.scope, 'sensitive_pi')));
-    expect(rows[0]?.granted, '撤回已提交但删除从未开始 —— 无合法性基础仍在持有数据').toBe(true);
+    expect(rows[0]?.granted).toBe(false);
 
-    const after = await countEvents(seeded.userId);
-    expect(after).toEqual(before);
-
-    // 票仍然拿得到 —— 回滚意味着这次撤回没有发生，而不是发生了一半。
-    const ticket = await tx(async (t) => requireConsent(t, seeded.userId, 'sensitive_pi'));
-    expect(ticket.scope).toBe('sensitive_pi');
+    // pending 的删除动作行在场（actionId 指向它）。
+    const pending = await db
+      .select({ payload: privacyAction.payload })
+      .from(privacyAction)
+      .where(eq(privacyAction.id, jobData?.actionId ?? ''))
+      .limit(1);
+    expect((pending[0]?.payload as { status?: string } | undefined)?.status).toBe('pending');
   });
 
   it('(d2) 源码里不存在「撤回后继续聊天」的降级只读分支', () => {

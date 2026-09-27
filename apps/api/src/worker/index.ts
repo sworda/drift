@@ -32,7 +32,7 @@
 
 import { PgBoss } from 'pg-boss';
 
-import { db } from '@drift/db';
+import { db, ownerSql, purgeDb } from '@drift/db';
 
 import { env } from '../config/env.ts';
 import { logError, logEvent } from '../obs/logger.ts';
@@ -46,6 +46,12 @@ import {
   registerContactAttemptTimeout,
   setContactAttemptTimeoutScheduler,
 } from './jobs/contact-attempt-timeout.ts';
+import {
+  ACCOUNT_DELETION_QUEUE,
+  ensurePgbossGrants,
+  registerAccountDeletion,
+  setAccountDeletionScheduler,
+} from './jobs/account-deletion.ts';
 
 /** pg-boss 的专属 schema。drizzle 的 schemaFilter 必须排除它。 */
 export const PGBOSS_SCHEMA = 'pgboss';
@@ -101,6 +107,24 @@ export async function startWorker(): Promise<WorkerHandle> {
 
   // 残缺账号的日对账（T-09-02）。与 publicness-reconcile 不同，它只需要数据库，
   // 镜像里读得到自己需要的一切，因此可以真的挂上 schedule 而不是留给 nightly。
+  // pgboss 表的跨角色授权（必须在 boss.start() 之后 —— 表是 start 建出来的）。
+  // app_role：撤回事务里的 boss.send 需要 pgboss.job 的 INSERT；purge_role：队列
+  // 载荷的删除级联需要 pgboss.job / archive 的 DELETE。见 account-deletion.ts。
+  await ensurePgbossGrants(ownerSql);
+
+  // 账号删除（PRIV-05 / D-19）。执行器是 purgeDb —— 审计表族的去标识化只有
+  // purge_role 有 UPDATE 权限（0001 的 REVOKE + 0004 的列级 GRANT）。
+  // boss 实例同时注册进入程级调度器：HTTP 链路（POST /me/delete 与撤回必选项）
+  // 在事务里入队要经过它。
+  setAccountDeletionScheduler(boss);
+  await registerAccountDeletion(boss, {
+    executor: purgeDb,
+    exportArtifactsDir: env.EXPORT_ARTIFACTS_DIR,
+    onEvent: (event, fields) => {
+      logEvent(event, { jobName: ACCOUNT_DELETION_QUEUE, ...fields }, event.endsWith('partial') ? 'warn' : 'info');
+    },
+  });
+
   await registerConsentReconcile(boss, {
     executor: db,
     onReport: (report) => {

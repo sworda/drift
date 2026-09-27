@@ -46,6 +46,40 @@ export const DELETE_ENTRY = '删除我的全部数据';
 /** 删除属 Plan 11 —— 同上，如实占位。 */
 export const DELETE_PENDING_NOTE = '删除功能还在建设中。现在就需要删除账号的话，请从「怎么联系我们与申诉」里写的方式告诉我们，我们人工删并回复你。';
 
+/**
+ * 删除破坏性确认（UI-SPEC Destructive confirmation 删除全部数据行，逐字）。
+ * ** 是加粗标记，与 UI-SPEC 同义（privacy-ui-contract 比对前两侧都剥掉）。
+ */
+export const DELETE_CONFIRM_COPY =
+  '**删除我的全部数据**：这会删除你的账号、全部聊天记录、导出记录，以及角色与你相处期间产生的经历。**此操作不可撤销。**请输入「删除我的全部数据」以确认。';
+
+/** 删除回执首读元素（UI-SPEC 视觉锚点契约：Display 28px，独立页面）。 */
+export const RECEIPT_HEADING = '已删除完成';
+
+/** 删除回执行（UI-SPEC Copywriting Contract 删除回执行，逐字；{N} 占位）。 */
+export const RECEIPT_SUMMARY = (n: number): string => `已删除完成。共清除 **${String(n)}** 处存储位置。`;
+export const RECEIPT_AUDIT_NOTE = (n: number): string =>
+  `另有 1 项审计记录已去除可识别信息，保留合规所需的事件记录（6 个月）—— 这一项不计入上面的 ${String(n)}。`;
+
+/** 删除回执逐项清单的滚动容器上限（清单可纵向滚动，摘要行 sticky）。 */
+export const RECEIPT_LIST_MAX_HEIGHT = 'max-h-[360px]';
+
+/** 删除没有完成（UI-SPEC Error state 删除没有完成行，逐字；{M}/{N} 占位）。 */
+export const DELETE_PARTIAL_COPY = (m: number, n: number): string =>
+  `删除**没有**全部完成：已清除 **${String(m)}** 处存储位置，还有 **${String(n)}** 处没能清除 —— 这部分数据仍然存在。请再试一次；如果反复失败，请从隐私中心提交申诉，我们会人工清除并回复你。`;
+
+/** 部分失败的三个出路（PLAN Task 2：重试 / 导出留副本 / 提交申诉）。 */
+export const PARTIAL_RETRY_LABEL = '再试一次';
+export const PARTIAL_EXPORT_LABEL = '先导出一份副本';
+export const PARTIAL_APPEAL_LABEL = '提交申诉';
+
+/** 回执页的导出按钮（回执页可导出，UI-SPEC 删除回执行）。 */
+export const RECEIPT_EXPORT_LABEL = '导出回执';
+
+/** 删除执行中的 Progress 文案（UI-SPEC loading E10）。 */
+export const DELETE_RUNNING_COPY = '正在删除你的数据';
+export const DELETE_RUNNING_NOTE = '删除完成后会自动跳转到回执页';
+
 /** 页面加载与加载失败（与空态必须可区分，UI-SPEC E9）。 */
 export const COLLECTED_LOADING = '正在读取「我们收集了什么」……';
 export const COLLECTED_LOAD_ERROR =

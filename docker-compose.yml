@@ -60,6 +60,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET 必填（better-auth 签名密钥，至少 32 字符；缺省会让每次重启静默登出全部用户）}
       CONTACT_ENCRYPTION_KEY: ${CONTACT_ENCRYPTION_KEY:?CONTACT_ENCRYPTION_KEY 必填（紧急联系人号码的 AES-256-GCM 密钥，64 个十六进制字符；无明文回退）}
       LLM_PROVIDER_MODE: ${LLM_PROVIDER_MODE:-mock}
+      EXPORT_ARTIFACTS_DIR: /var/lib/drift/exports
     volumes:
       # 导出文件（PRIV-04）。命名卷而不是 bind mount —— Plan 11 Task 3 的 7 天
       # TTL 清理作用于它，而一个宿主路径会让「清理范围」取决于部署者怎么挂。

@@ -58,6 +58,12 @@ const EnvSchema = z.object({
   }),
   /** mock = 不出网的假 provider（D-27）；live = 真实调用。默认 mock。 */
   LLM_PROVIDER_MODE: z.enum(['mock', 'live']).default('mock'),
+  /**
+   * 导出产物（PRIV-04）的根目录：D-17 的 7 天 TTL 与 PRIV-05 的删除级联都作用在
+   * 它上面。compose 挂的是命名卷 export-artifacts:/var/lib/drift/exports（一个宿主
+   * 路径会让「清理范围」取决于部署者怎么挂）—— 生产显式设置；测试传临时目录。
+   */
+  EXPORT_ARTIFACTS_DIR: z.string().min(1).default('/var/lib/drift/exports'),
 });
 
 export type Env = Readonly<z.infer<typeof EnvSchema>>;

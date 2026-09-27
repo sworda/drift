@@ -128,3 +128,14 @@
     @apply font-sans;
     }
 }
+
+/* Progress 的 indeterminate 动画（apps/web/src/components/ui/progress.tsx）。
+ * transform 动画不触发布局 —— 删除/导出执行中的进度条不该引起重排。 */
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}

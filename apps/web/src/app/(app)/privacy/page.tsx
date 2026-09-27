@@ -16,14 +16,13 @@ import type { CollectedView } from '@drift/db/inventory';
 import { Button } from '@/components/ui/button';
 
 import { CollectedList } from '@/features/privacy/collected-list';
+import { DeleteDialog } from '@/features/privacy/delete-dialog';
 import { ConsentSwitches, type ConsentSwitchItem } from '@/features/privacy/consent-switches';
 import { PrivacyTabs, type PrivacyTabId } from '@/features/privacy/tabs';
 import {
   COLLECTED_LOAD_ERROR,
   COLLECTED_LOAD_RETRY,
   COLLECTED_LOADING,
-  DELETE_ENTRY,
-  DELETE_PENDING_NOTE,
   EXPORT_CTA,
   EXPORT_PENDING_NOTE,
   TAB_COLLECTED,
@@ -137,18 +136,9 @@ export default function PrivacyPage() {
         <section aria-label={TAB_DELETE}>
           <h2 className="px-md pt-lg text-heading font-semibold text-text-primary">{TAB_DELETE}</h2>
           <div className="px-md py-lg">
-            {/* destructive 文字按钮，不吃 accent —— 刻意不抢眼（UI-SPEC 视觉锚点契约）。 */}
-            <button
-              type="button"
-              data-testid="delete-entry"
-              disabled
-              className="text-label font-medium text-destructive underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {DELETE_ENTRY}
-            </button>
-            <p className="mt-md whitespace-normal break-words text-label leading-relaxed text-text-secondary">
-              {DELETE_PENDING_NOTE}
-            </p>
+            {/* 删除入口（destructive 文字按钮，不吃 accent）+ AlertDialog + 短语解锁 +
+                执行完成后跳转独立回执页 —— 全部在 DeleteDialog 里（PRIV-05）。 */}
+            <DeleteDialog />
           </div>
         </section>
       ) : null}

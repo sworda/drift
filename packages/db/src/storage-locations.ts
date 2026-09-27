@@ -346,7 +346,16 @@ export const STORAGE_LOCATIONS: readonly StorageLocation[] = [
     id: 'pgboss.archive',
     label: '已完成作业归档',
     containsPersonalInfo: true,
+    // ⚠️ pg-boss 12.34 实测**没有** archive 表（那是 v10 及更早的概念：v12 的
+    // 完成作业留在 pgboss.job 里按 retention 清理）。RESEARCH §7.1 按旧版认知登记了
+    // 这个位置 —— 这里按「表存在才清、不存在则 0 行成功」的防御形态保留它：
+    // 未来 pg-boss 升级若重新引入 archive 表（它装的就是 jsonb 载荷），这条 purge
+    // 已经就位，而不是等它带着 userId 重新出现在库里。
     purge: async (ctx, userId) => {
+      const exists = await ctx.executor.execute(
+        sql`select to_regclass('pgboss.archive') is not null as present`,
+      ).then((rows) => (rows as unknown as { present: boolean }[])[0]?.present === true);
+      if (!exists) return 0;
       const rows = (await ctx.executor.execute(
         sql`delete from pgboss.archive where data->>'userId' = ${userId} returning 1`,
       )) as unknown[];
