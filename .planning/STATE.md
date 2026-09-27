@@ -121,7 +121,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: 撤回必选同意项与三条留证写入同一事务；入队删除作业失败即整条回滚并返回 503 — 另外两种写法都会让系统在无合法性基础的情况下继续处理个人信息：做成「撤回后继续聊天」的降级只读，或提交撤回但不启动删除。两者在界面上都看起来像成功。回滚是诚实的失败，而 UI-SPEC 的「这项同意没有撤回成功 —— 对应的数据流仍在继续」那一行文案存在的理由正是这个分支
 - [Phase 01]: 五项同意的状态提成纯函数模块（setScope），而不是 PLAN 写的五个独立 useState — 五个独立 useState 能让「点一项其余四项不变」为真，但只能靠肉眼确认 —— 没有任何断言会在有人后来把两个 setState 写到同一个 onChange 里时变红。提成纯函数之后那条性质被穷举证明（5 scope × 2 值 × 2 起点，逐键比对），并带一条注入式非空真证明，且不需要 DOM
 - [Phase 01]: 为统一 drizzle-orm 的 peer 解析上下文，把 kysely 0.29.6 声明进根与 packages/db — better-auth 依赖 kysely，于是 apps/api 与 packages/db 解析到两份不同 peer 后缀的 drizzle-orm 实例，tsc 报出大量 nominal 冲突（SQL / PgColumn 互不兼容）。kysely 本就在依赖树里（better-auth 的传递依赖），显式声明只是让三个 importer 看到同一个 peer 集合；pnpm 不会为未变化的 specifier 重新解析 peer，必须 remove + add 一次 drizzle-orm 才会收敛
-- [Phase 01]: 注册 UI 的渲染断言用 react-dom/server 静态渲染而不是 RTL，两条需要真实 DOM 事件的断言登记为 skip — @testing-library/react 与 jsdom 不在 Plan 02 那次 blocking-human 包合法性核验的 25 包清单里，T-09-SC 禁止本 plan 新增未经核验的包。已向编排器上报请求裁决但未获回复。被 skip 的只有「真实点击后的状态变化」与「焦点落在第一个出错字段」两条；PLAN 里最核心的那条（点一项其余四项不变）强度反而更高 —— 它被穷举证明。01-08/10/11/12/14 的验收里同样写着 RTL 断言，因此这是一次共用的解除条件
+- [Phase 01]: @testing-library/react@16.3.3 + @testing-library/dom@10.4.2 + jsdom@30.1.1 经一次 blocking-human 包合法性 checkpoint 放行（编排器独立核验 registry + 用户裁决，2026-09-27），Plan 02 的 25 包清单之外多出这三个；01-08/10/11/12/14 可直接复用，不需再次 checkpoint — 六个 plan 的验收里都写着 RTL 断言，是一次规划期遗漏而非范围扩张。放行条件三条：锁精确版本、只进根 devDependencies、不得泄漏进生产依赖图（前两条由 tools/ci/test-deps-isolation.test.ts 机械断言；第三条见下方 blocker）
+- [Phase 01]: 「点一项其余四项不变」同时保留穷举纯函数断言与 RTL 点击断言，两者互补 — 纯函数版是穷举（5 scope × 2 值 × 2 起点），RTL 版证明「UI 真的接在那个纯函数上」。只有前者可能接错线，只有后者只是一次抽样
 
 ### Pending Todos
 
@@ -136,7 +137,7 @@ None yet.
 - **Phase 5 的 ε/k/位移上限/探针阈值不可靠讨论决定**，必须由 shadow 期数据校准
 - 宿主 glibc 2.28 低于 Next 16 原生 SWC 要求的 GLIBC_2.29：本机无法 next build / next dev，前端开发必须在容器内进行或换宿主（01-03-SUMMARY Issues #1）
 - integration / nightly 两条 workflow 目前必然为红（test:integration / test:probes 无被测对象；nightly 的两个脚本未落地），且三条 workflow 从未真实执行过（仓库无 git remote）—— 阻断规则的另一半是 GitHub 上的 required check 配置，不在仓库文件里
-- **RTL 与 jsdom 未获包合法性批准**（Plan 09 上报，未获回复）—— 01-08 / 01-09 / 01-10 / 01-11 / 01-12 / 01-14 六个 plan 的验收里都写着 RTL 断言，但 `@testing-library/react` / `@testing-library/dom` / `jsdom` 不在 Plan 02 那次 blocking-human 核验的 25 包清单里。01-09 已改用 react-dom/server 静态渲染并登记 `ui-contract-static-render-only`；后续五个 plan 若不解除，会各自再登记一次同样的缺口
+- **jsdom 与 vitest 通过「可选 peer」链路进了 apps/api 的生产镜像**（Plan 09 实测发现）—— better-auth 把 `vitest` 声明为可选 peer，vitest 又把 `jsdom` 声明为可选 peer，pnpm 从 workspace 图满足它们，于是两者出现在 `docker build -f apps/api/Dockerfile` 产物的 `/app/node_modules/.pnpm` 里。实测无效的两条路：`.npmrc` 的 `resolve-peers-from-workspace-root=false`（pnpm 12.6.0 下 better-auth 仍解析出 vitest peer）、Dockerfile 的 `--prod`（能去掉 @testing-library/*，但这两个是生产依赖的 peer）。真正的修法是 `pnpm deploy --prod` 或多阶段裁剪 —— 需要「容器仍能正常服务」作为验收，属基础设施 plan。现有约束：`tools/ci/test-deps-isolation.test.ts` 把这个已知集合钉住，任何新增泄漏或扩大到 apps/web 都会变红
 
 ## Deferred Items
 

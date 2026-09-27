@@ -23,12 +23,19 @@ provides:
 affects: [01-08, 01-10, 01-11, 01-12, 01-14]
 
 actuals:
-  tokens: 41000
+  tokens: 48000
   tasks: 3
-  commits: 3
+  commits: 5
 
 tech-stack:
-  added: [better-auth@1.7.6, kysely@0.29.6, "shadcn ui: checkbox/label/input/field/radio-group/separator"]
+  added:
+    - better-auth@1.7.6
+    - kysely@0.29.6
+    - "shadcn ui: checkbox/label/input/field/radio-group/separator"
+    # 以下三个经一次 blocking-human 包合法性 checkpoint 放行（见 ## 包合法性 Checkpoint 记录）
+    - "@testing-library/react@16.3.3"
+    - "@testing-library/dom@10.4.2"
+    - jsdom@30.1.1
   patterns:
     - "AsyncLocalStorage + Proxy 把第三方库的 db 句柄绑到当前事务"
     - "品牌类型的第二次复用：ConsentTicket<S> 单一产出点 + eslint 断言禁令 + 负向 type fixture"
@@ -58,6 +65,10 @@ key-files:
     - tools/ci/consent-copy-contract.test.ts
     - tools/ci/policy-version-binding.test.ts
     - tools/ci/type-fixtures/consent-ticket-escape.ts
+    - tools/ci/test-deps-isolation.test.ts
+    - tools/ci/vitest-jsdom-setup.ts
+    - apps/web/src/features/onboarding/register-render.test.tsx
+    - apps/web/src/features/onboarding/consent-state.test.ts
   modified:
     - packages/db/src/message.ts
     - packages/db/src/onboarding.ts
@@ -77,7 +88,9 @@ key-decisions:
   - "撤回必选同意项与三条留证同事务；入队删除失败即整条回滚并回 503"
   - "五项同意状态提成纯函数模块，把「点一项其余不变」从肉眼确认变成穷举断言"
   - "kysely 声明进根与 packages/db 以统一 drizzle-orm 的 peer 解析上下文"
-  - "注册 UI 渲染断言用 react-dom/server 静态渲染；RTL/jsdom 未获包裁决，两条 DOM 事件断言登记 skip"
+  - "RTL + jsdom 经 blocking-human 包合法性 checkpoint 放行；注册 UI 落地完整 RTL 断言，无任何 skip"
+  - "「点一项其余四项不变」同时保留穷举纯函数断言与 RTL 点击断言 —— 前者是穷举、后者证明 UI 真的接在那个纯函数上，互补而非替代"
+  - "紧急联系人那一步的「下一步」不禁用 —— 否则 UI-SPEC 为这一步定的格式错误文案与焦点移动永远不可达"
 
 patterns-established:
   - "外部库参与本地事务：ALS 存当前 Tx + Proxy 转发属性访问，唯一绑定点是一个 runInXxxTx 包装"
@@ -173,8 +186,11 @@ coverage:
       - kind: unit
         ref: "apps/web/src/features/onboarding/consent-state.test.ts#改 %s 时其余四项逐键不变（5 scope × 2 值 × 2 起点）"
         status: pass
-      - kind: unit
-        ref: "apps/web/src/features/onboarding/register-render.test.tsx#恰好渲染 5 个 checkbox / 无「全选」/ 注入式非空真证明"
+      - kind: automated_ui
+        ref: "apps/web/src/features/onboarding/register-render.test.tsx#(c) 点击 %s 后其余四项逐个不变（RTL 真实点击，5 次）"
+        status: pass
+      - kind: automated_ui
+        ref: "apps/web/src/features/onboarding/register-render.test.tsx#(a)(b) 恰好 5 个 checkbox / 无「全选」/ 注入式非空真证明"
         status: pass
       - kind: other
         ref: "tools/ci/consent-ui-contract.test.ts（代码里无「全选」与批量 setter，各带非空真证明）"
@@ -184,16 +200,16 @@ coverage:
     description: "两项必选未全勾时主 CTA 为禁用态，不是提交后报错"
     requirement: "PRIV-01"
     verification:
-      - kind: unit
-        ref: "apps/web/src/features/onboarding/register-render.test.tsx#(d) 三条：不勾/只勾一项 ⇒ disabled；两项都勾 ⇒ enabled"
+      - kind: automated_ui
+        ref: "apps/web/src/features/onboarding/register-render.test.tsx#(d) 四条：不勾/只勾一项 ⇒ disabled；两项都勾 ⇒ enabled；真实点击两次后由 disabled 变 enabled"
         status: pass
     human_judgment: false
   - id: D10
     description: "18 岁门禁是无出口的法定终态拒绝（容器内 button 与 a 数量为 0）"
     requirement: "COMPLY-07"
     verification:
-      - kind: unit
-        ref: "apps/web/src/features/onboarding/register-render.test.tsx#(e) 整页没有任何 button 与 a"
+      - kind: automated_ui
+        ref: "apps/web/src/features/onboarding/register-render.test.tsx#(e) 三条：整页 button/link 均为 0；生日当天不被拒；改成未满 18 后出口消失"
         status: pass
       - kind: integration
         ref: "tests/integration/tracer.test.ts#未满 18 岁注册被法定终态拒绝（COMPLY-07）"
@@ -203,11 +219,16 @@ coverage:
     description: "紧急联系人二选一、手机号格式校验、说明在 description 行而非占位符；提交失败保留已填内容并把焦点移到第一个出错字段"
     requirement: "COMPLY-06"
     verification:
-      - kind: unit
-        ref: "apps/web/src/features/onboarding/register-render.test.tsx#(g) 说明与占位符是两段不同的文本 / 两个单选都在场"
+      - kind: automated_ui
+        ref: "apps/web/src/features/onboarding/register-render.test.tsx#(g) 说明在 field-description 且 aria-describedby 指向它 / 两个单选都在场"
         status: pass
-    human_judgment: true
-    rationale: "「焦点真的移到第一个出错字段」与「点击 checkbox 之后状态变化」需要真实 DOM 事件，而 RTL/jsdom 未获包合法性批准（SKIPPED_CHECKS 的 ui-contract-static-render-only）。当前只有 firstInvalidContactFieldId 的纯函数断言与静态渲染断言，焦点落位本身必须由人确认"
+      - kind: automated_ui
+        ref: "apps/web/src/features/onboarding/register-render.test.tsx#(f) 两条：10 位手机号 ⇒ 错误文案在场且 document.activeElement 是该输入框；称呼为空 ⇒ 焦点落在称呼"
+        status: pass
+      - kind: automated_ui
+        ref: "apps/web/src/features/onboarding/register-render.test.tsx#提交失败后退回第一步，邀请码与昵称仍是提交前的内容"
+        status: pass
+    human_judgment: false
   - id: D12
     description: "注册相关文案与撤回确认文案逐字对齐 01-UI-SPEC.md 的 Copywriting Contract"
     verification:
@@ -227,7 +248,7 @@ coverage:
     human_judgment: true
     rationale: "构建在容器内一次性验证通过（/register 预渲染为静态路由），但页面的实际观感、响应式表现与键盘可达性没有任何自动化断言覆盖 —— 需要人在容器里打开页面走一遍"
 
-duration: 1h 18m
+duration: 1h 40m
 completed: 2026-09-27
 status: complete
 ---
@@ -238,11 +259,11 @@ status: complete
 
 ## Performance
 
-- **Duration:** 1h 18m
+- **Duration:** 1h 40m
 - **Started:** 2026-09-27T07:26:00Z
-- **Completed:** 2026-09-27T08:44:00Z
-- **Tasks:** 3
-- **Files created/modified:** 74（3 次提交合计）
+- **Completed:** 2026-09-27T09:06:00Z
+- **Tasks:** 3（+ 一次 blocking-human 包合法性 checkpoint 放行后的 RTL 改造）
+- **Files created/modified:** 83（5 次提交合计）
 
 ## Accomplishments
 
@@ -254,14 +275,16 @@ status: complete
 - **撤回必选同意项走删除流程，而不是降级只读。** Plan 11 之前入队会抛 not-implemented，于是整条撤回回滚并返回 503 —— 这是刻意选的失败方向。
 - **五项同意在界面上互不捆绑，且被穷举证明。** `setScope` 是纯函数，5 scope × 2 值 × 2 起点全部逐键比对；`onToggle` 的签名只吃一个 scope，捆绑同意在类型层不可表达。
 - **18 岁拒绝是无出口的终态。** 未满 18 时整页只剩那一行文案，button 与 a 数量为 0。
+- **注册 UI 的七条验收全部落成 RTL 断言，没有任何 skip。** 包合法性 checkpoint 放行后，`register-render.test.tsx` 用真实点击逐项验证 (c)、用 `document.activeElement` 验证 (f) 的焦点落位，并补了「提交失败后退回第一步已填内容仍在」；穷举的纯函数版本按编排器要求保留 —— 前者是穷举，后者证明 UI 真的接在那个纯函数上。
 
 ## Task Commits
 
 1. **Task 1: 单事务注册 + 加密紧急联系人 + 日对账** — `64d2566` (feat)
 2. **Task 2: ConsentTicket 守卫 + 撤回语义** — `73105d7` (feat)
 3. **Task 3: 注册 UI** — `e0b3e2d` (feat)
+4. **Task 3 续：包合法性 checkpoint 放行后改为完整 RTL** — `56295c9` (test)
 
-**Plan metadata:** 本次提交（docs）
+**Plan metadata:** `077392b` (docs) + 本次修订（docs）
 
 ## Files Created/Modified
 
@@ -322,16 +345,24 @@ status: complete
 - **Fix:** 改用 `encryptContact()` 算一次真密文；新增 `contact_ref_undecryptable` 这个 unavailable 成因（与「没存下来」分开记）。
 - **Committed in:** `64d2566`
 
-**7. [偏离] 注册 UI 的渲染断言用 react-dom/server 静态渲染，不是 RTL**
-- **Found during:** Task 3（执行前已上报编排器）
-- **Issue:** PLAN Task 3 的七条验收全是 RTL 断言，但 `@testing-library/react` / `@testing-library/dom` / `jsdom` 不在 Plan 02 那次 `gate="blocking-human"` 包合法性核验的 25 包清单里，而 T-09-SC 禁止本 plan 新增未经核验的包。已向 team-lead 请求裁决，两次上报均未获回复。
-- **Fix:** (a)(b)(d)(e)(g) 五条改用静态渲染实现；(c)「点一项其余四项不变」改用穷举的纯函数断言（**强度高于**一次点击）；(f) 焦点落位与真实点击两条登记 `SKIPPED_CHECKS.md` 的 `ui-contract-static-render-only`，解除条件写成「批准安装 RTL 后把静态断言换成 RTL 断言」。同时在 STATE.md 记了一条 blocker —— 01-08/10/11/12/14 都需要同一次解除。
-- **Committed in:** `e0b3e2d`
+**7. [Rule 4 → 已放行] 注册 UI 的 RTL 断言需要三个 Plan 02 清单外的包**
+- **Found during:** Task 3 之前（执行开始时即上报）
+- **Issue:** PLAN Task 3 的七条验收全是 RTL 断言，但 `@testing-library/react` / `@testing-library/dom` / `jsdom` 不在 Plan 02 那次 `gate="blocking-human"` 包合法性核验的 25 包清单里，而 T-09-SC 禁止本 plan 新增未经核验的包。这是一次规划期遗漏 —— 01-08/10/11/12/14 的验收里同样写着 RTL 断言。
+- **Fix:** 按 Plan 02 的包合法性协议上报并**等到了裁决**（见下方 `## 包合法性 Checkpoint 记录`）。放行后 Task 3 的测试改为完整 RTL：七条验收逐条落地，**没有任何 skip**。等待期间先交付了静态渲染版本（`e0b3e2d`），放行后整体替换（`56295c9`）。
+- **Verification:** `register-render.test.tsx` 24 条断言全绿（含 (c) 的 5 次真实点击、(f) 的两次 `document.activeElement` 断言）；`tools/ci/test-deps-isolation.test.ts` 9 条断言机械化三条放行条件。
+- **Committed in:** `e0b3e2d` → `56295c9`
+
+**8. [Rule 2 - Missing critical] 紧急联系人那一步的「下一步」不再禁用**
+- **Found during:** Task 3 的 RTL 改造（(f) 的焦点断言无法触发）
+- **Issue:** 这个按钮在手机号格式不通过时是 `disabled`，于是 UI-SPEC 为这一步专门定的那条错误文案（「这个联系方式我们没法识别，请填写 11 位手机号……」）与那次焦点移动**永远不可达** —— 一条到不了的法定告知比一个多余的禁用态更糟。静态渲染版本没暴露这个问题，因为它根本点不动按钮。
+- **Fix:** 第二步的「下一步」不禁用，点击时校验 → 展示错误文案 + 把焦点移到第一个出错字段。第一步仍禁用（它没有对应的错误文案，空字段本身可见）。「未完成不得提交」这条契约指的是**主 CTA**（由两项必选同意把关），不是中间步骤的翻页按钮。
+- **Verification:** `register-render.test.tsx` 的 (f) 两条。
+- **Committed in:** `56295c9`
 
 ---
 
-**Total deviations:** 7（1 条 Rule 1 库能力误判 + 1 条 Rule 3 依赖解析 + 3 条 Rule 2 缺失关键 + 1 条 Rule 1 测试假数据 + 1 条包裁决未决导致的验证手段降级）
-**Impact on plan:** 偏离 1/2/3/4/5/6 全部是朝「约束更强」的方向；偏离 7 是唯一一次强度降级，已按登记规则写成可判定的解除条件并上报。无范围蔓延。
+**Total deviations:** 8（1 条 Rule 1 库能力误判 + 1 条 Rule 3 依赖解析 + 4 条 Rule 2 缺失关键 + 1 条 Rule 1 测试假数据 + 1 条 Rule 4 包裁决，已放行）
+**Impact on plan:** 八条全部朝「约束更强」的方向。偏离 7 曾是一次临时的强度降级，在包裁决放行后已整体消除（对应的 SKIPPED_CHECKS 行也已删除）。无范围蔓延。
 
 ## Authentication Gates
 
@@ -344,6 +375,9 @@ status: complete
 3. **源码断言会把自己的说明判成违规。** 「代码里不得出现『全选』」这类扫描第一次跑就被 `consent-checkboxes.tsx` 文件头那句「没有『全选』控件」判红。全部源码扫描改为**先去注释再匹配**，并各带一条非空真证明（把违规词放进代码位置仍会被抓到）—— 否则这类断言只会逼人把说明删掉，那是用检查换沉默。
 4. **`git checkout --` / `rm -rf` 在沙箱里被拒**（不执行，直接返回 error 对象）。临时破坏验证的还原一律用 Edit 反向改回，临时目录用 node 的 `fs.rmSync` 删。
 5. **`state.add-decision` 的 `--summary-file` 拒绝仓库外路径**（`/tmp` 被判 Path escapes allowed directory）。改用仓库内 `.gsd/tmp/` 并在写完后删掉。
+6. **vitest 用一条正则在整个文件里找 `@vitest-environment <name>`，不只看首个注释块。** 因此在一个**断言文件**里把这个串写成字面量（用来断言另一个文件带了这个 docblock）会把**自己**切到 jsdom 环境，而 jsdom 下 `import.meta.url` 不是 `file:` —— 顶部的 `fileURLToPath` 直接抛「The URL must be of scheme file」，整个文件 0 test 且 vitest 不说原因。处置：把这个串拼出来（`\`@vitest-\${'environment'} jsdom\``）。
+7. **jsdom 30 不实现 `ResizeObserver`**，而 Radix 的 `@radix-ui/react-use-size`（Checkbox 与 RadioGroup 的指示器都用它）在 layout effect 里直接 `new` 它。已在 `tools/ci/vitest-jsdom-setup.ts` 补一个**不触发回调**的 stub —— 一个会伪造尺寸变化的 stub 会让「布局在某尺寸下正确」这类断言变成自说自话。
+8. **条件 3 的实测发现一个真实泄漏（见下方专节）**：`jsdom` 与 `vitest` 通过「可选 peer」链路进了 apps/api 的生产镜像。
 
 ## SKIPPED_CHECKS 变更
 
@@ -351,9 +385,44 @@ status: complete
 |---|---|---|
 | **删除** | `masked-contact-until-crypto` | crypto 落地，`startContactAttempt` 的 `maskedContact` 改为真实遮蔽形态，并在 `contact-attempt.test.ts` 的 pending 用例补上「联络状态行含遮蔽后的联系方式且不含明文」断言 |
 | **新增** | `account-deletion-not-implemented` | 撤回必选同意项的删除入队属 Plan 11；当前抛 not-implemented 于是整条回滚并回 503。解除条件：Plan 11 填实现并把 (d) 改为断言「撤回成功且作业真的入队」 |
-| **新增** | `ui-contract-static-render-only` | RTL/jsdom 未获包合法性批准，两条需要真实 DOM 事件的断言（真实点击、焦点落位）暂缺。解除条件：批准安装 RTL 后换成 RTL 断言 |
+| **新增后又删除** | `ui-contract-static-render-only` | 等待包裁决期间登记过一次（`e0b3e2d`）；裁决放行后 RTL 断言落地，该缺口已不存在，同一 plan 内删除（`56295c9`）。**不留残迹** —— 一条描述已不存在的缺口的登记行，会让后来人以为还有一处没做 |
 
 **未新增** 任何关于 `policy_version` 的登记行 —— 该依赖由 Plan 15 前移到 wave 5 真正解决了，`policy-version-binding.test.ts` 有一条断言盯着这件事。
+
+**也未**为下面那条生产依赖泄漏登记 skip：它不是「本该有的检查暂时缺席」，而是一个**已发现、已测量、已被断言钉住**的既有缺陷，修法属基础设施 plan。按编排器的指示如实写在 SUMMARY 与 STATE.md 的 blockers 里，不占 SKIPPED_CHECKS 的位置。
+
+## 包合法性 Checkpoint 记录
+
+**这是 Plan 02 的 25 包清单之外的一次 `gate="blocking-human"` 包合法性 checkpoint，已放行。** 记在这里以便后续 plan 有可追溯的批准依据 —— **01-08 / 01-10 / 01-11 / 01-12 / 01-14 可直接复用这三个包，不需再次 checkpoint。**
+
+| 项 | 内容 |
+|---|---|
+| 日期 | 2026-09-27 |
+| 包 | `@testing-library/react@16.3.3`、`@testing-library/dom@10.4.2`、`jsdom@30.1.1` |
+| 核验方 | 编排器**独立**完成 registry 核验（明确不采信执行器的转述） |
+| 核验内容 | 三者均 MIT；RTL 维护者含 testing-library-bot / kentcdodds / timdeschryver 等官方组，repo `github.com/testing-library/react-testing-library`；jsdom 维护者 timothygu，repo `github.com/jsdom/jsdom`；周下载量 68,630,647 / 84,565,830 / 117,137,714；RTL 16.3.3 的 peer 为 `react ^18 \|\| ^19` 与 `@testing-library/dom ^10`，与本仓库 react 19.3.0 + dom 10.4.2 相容 |
+| 裁决 | 用户放行 |
+| 放行理由 | (c)「点击某个同意项后其余不变」就是 PRIV-01 无捆绑同意（个保法第十四条）的核心机械断言；`SKIPPED_CHECKS.md` 开篇即写「一个静默 skip 掉的检查与一条不存在的防线没有区别」—— 在这一条上留缺口与本阶段的设计哲学相反。同时这是一次规划期遗漏的补齐（六个 plan 的验收都写了 RTL 断言），不是范围扩张 |
+| 条件 1 | **锁精确版本，不用 caret / tilde** —— `tools/ci/test-deps-isolation.test.ts` 逐个断言版本号字面相等 |
+| 条件 2 | **只进 workspace 根的 devDependencies** —— 同一文件断言根无任何 `dependencies`，且两个 app 的 manifest 都不声明这三个包 |
+| 条件 3 | **不得泄漏进生产依赖图** —— 部分达成，见下 |
+
+### 条件 3 的实测结论（部分达成）
+
+`@testing-library/*` **确实不在**任何 app 的生产依赖闭包里（有独立断言）。但实测发现 `jsdom` 与 `vitest` **在** apps/api 的闭包里，且不是因为谁把它们写进了 `dependencies`：
+
+- `better-auth` 把 `vitest` 声明为**可选 peer**，`vitest` 又把 `jsdom` 声明为**可选 peer**；pnpm 从 workspace 图满足可选 peer，于是 apps/api 的 better-auth 快照带上了 vitest、vitest 快照带上了 jsdom。
+- **已用 `docker build -f apps/api/Dockerfile` 验证**：两者都出现在产出镜像的 `/app/node_modules/.pnpm` 里。
+- 这条边是 **better-auth 带来的**（本 plan 引入），不是这三个测试包本身的问题 —— 在 better-auth 之前没有任何东西把 vitest 声明为 peer。
+
+两条试过但**无效**的路（都已实测，不要重复）：
+
+| 尝试 | 结果 |
+|---|---|
+| `.npmrc` 的 `resolve-peers-from-workspace-root=false`（并 remove + add 强制重解析 better-auth） | pnpm 12.6.0 下 better-auth 仍然解析出 vitest peer；drizzle-orm 单实例未被破坏，但泄漏照旧 |
+| Dockerfile 的 `pnpm install --prod` | 能去掉 `@testing-library/*`，但 jsdom 与 vitest 是**生产依赖的** peer，照旧进镜像。另外 apps/web 的镜像在构建期需要 devDependencies（tailwind），`--prod` 对它本就不可用 |
+
+真正的修法是 `pnpm deploy --prod` 或多阶段构建裁剪 —— 那是一次需要「容器仍能正常服务」作为验收的基础设施改动，不属于本 plan 的范围。**现有约束**：`tools/ci/test-deps-isolation.test.ts` 把这个已知集合（apps/api: `{jsdom, vitest}`，apps/web: `{}`）钉成断言的期望值 —— 任何**新**的测试包泄漏、或泄漏面扩大到 apps/web，都会立刻变红。缩小这个集合是进步，但必须同步改那个常量。已记入 STATE.md 的 Blockers。
 
 ## User Setup Required
 
@@ -372,20 +441,24 @@ status: complete
 
 | 检查 | 结果 |
 |---|---|
-| `pnpm run ci:fast` | 退出 0（typecheck + lint + 113 unit + 217 contract） |
+| `pnpm run ci:fast` | 退出 0（typecheck + lint + unit + contract，合计 236 用例） |
 | `pnpm run test:integration` | 8 文件 / 100 用例全绿 |
+| `vitest run apps/web/src/features/onboarding/register-render.test.tsx` | 24 条 RTL 断言全绿（jsdom 环境） |
+| `vitest run tools/ci/test-deps-isolation.test.ts` | 9 条全绿（三条放行条件的机械形态） |
 | `node tools/ci/check-contract-amendments.mjs` | `OK 13/13 contract amendments` |
 | `pnpm run typecheck:fixtures` | 非零退出，13 条 `error TS`（`consent-ticket-escape.ts` 4 条 + `gated-text-escape.ts` 6 条 + `probe-routed.ts` 3 条） |
 | `grep -rn 'as ConsentTicket' packages apps` | 只有 `packages/db/src/consent-ticket.ts` 一处（含两行注释） |
 | `grep -c 'used_by IS NULL' apps/api/src/modules/auth/invite.ts` | 2 |
 | `docker build -f apps/web/Dockerfile` | 成功，`/register` 预渲染为静态路由 |
-| 临时破坏验证 | 把写 consent 挪出事务 → register (c) 变红（已还原）；另有三条注入式非空真证明常驻测试 |
+| `docker build -f apps/api/Dockerfile` | 成功；镜像内 `.pnpm` 目录用于测量条件 3 的泄漏（见上节） |
+| 临时破坏验证 | 把写 consent 挪出事务 → register (c) 变红（已还原）；另有四条注入式非空真证明常驻测试（全选按钮 / 批量 setter / 越界 kind / 去注释扫描） |
 
 ## Self-Check: PASSED
 
 - `key-files.created` 全部在磁盘上（逐个 `[ -f ]` 通过）
 - `git log --oneline --grep="01-09"` 返回 3 条生产提交
-- 每个任务的 `<acceptance_criteria>` 逐条复核：Task 1 八条、Task 2 六条、Task 3 七条 —— 全部通过，唯一降级项（RTL 的两条 DOM 事件断言）已按登记规则写入 SKIPPED_CHECKS 并上报
+- 每个任务的 `<acceptance_criteria>` 逐条复核：Task 1 八条、Task 2 六条、Task 3 七条 —— **全部通过，无降级项**（RTL 的两条 DOM 事件断言在包裁决放行后已落地，对应的 SKIPPED_CHECKS 行同 plan 内删除）
+- PLAN Task 3 的七条 RTL 断言 (a)–(g) 各有一个 describe，由 `tools/ci/consent-ui-contract.test.ts` 的覆盖元测试逐条索引（防「加了第七条但只测了六处」）
 - 计划级 `<verification>` 六条：1/2/3/4/6 通过；第 5 条的三次「临时破坏再还原」有两次改成了测试内常驻注入（更强），其中「写 consent 挪出事务」按字面做过一次并已还原
 
 ## Next Phase Readiness
@@ -400,8 +473,9 @@ status: complete
 6. **同意与紧急联系人的取值域、`isAdult`、撤回确认文案都在 `@drift/contract`。** apps/web 不能 import `@drift/db`（后者加载即读 `DATABASE_URL`），需要跨端共享的常量一律放 contract。
 7. **两个新必填 env**（`BETTER_AUTH_SECRET` / `CONTACT_ENCRYPTION_KEY`）：新写集成测试时必须在 import apps/api 之前设好，否则 `config/env.ts` 会 `process.exit(1)` 而 vitest 只报「0 test」。
 8. **`vitest.config.ts` 的 unit project 现在含 `.tsx` 并映了 `@/` 别名** —— 后续 plan 的 web 渲染断言可以放在组件旁边。
-9. **RTL/jsdom 的包裁决仍未决**，STATE.md 有一条 blocker。01-08/10/11/12/14 的验收里都写着 RTL 断言；建议在下一个需要它的 plan 之前一次性解决。
-10. **`docker build -f apps/web/Dockerfile -t drift-web-verify:01-09 .` 留下了一个本地镜像标签**（验证用），可安全删除。
+9. **RTL 已就位，直接复用，不需再次 checkpoint。** `@testing-library/react@16.3.3` / `@testing-library/dom@10.4.2` / `jsdom@30.1.1` 已在根 devDependencies；写 web 渲染断言时：① 文件放 `apps/web/src/**`（react 只在那里解析得到），② 首行加 `@vitest-environment jsdom` docblock，③ 只用 `fireEvent`（`user-event` **不在**批准清单里，要用得再走一次 checkpoint），④ jsdom 缺的浏览器 API 加到 `tools/ci/vitest-jsdom-setup.ts`（带 `typeof === 'undefined'` 守卫），⑤ 新增 UI 契约断言时别把 `@vitest-environment` 写成字面量（见 Issues #6）。
+10. **生产镜像里有 `jsdom` 与 `vitest`（经 better-auth 的可选 peer 链路）。** 它已被 `tools/ci/test-deps-isolation.test.ts` 钉住，但**尚未修**。做基础设施相关 plan 的人请一并处理（`pnpm deploy --prod` 或多阶段裁剪），修完后缩小那个文件里的 `KNOWN_OPTIONAL_PEER_LEAKS`。
+11. **本地留下三个验证用镜像标签**（`drift-web-verify:01-09`、`drift-api-verify:01-09`、`drift-api-prodprobe:01-09`），可安全删除。
 
 ---
 *Phase: 01-compliance-safety-chat-skeleton*
