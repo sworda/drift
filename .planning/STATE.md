@@ -3,11 +3,11 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-09-PLAN.md
-last_updated: "2026-09-27T11:11:54.365Z"
+stopped_at: Completed 01-10-PLAN.md
+last_updated: "2026-09-27T12:58:52.084Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
-state_head: 6cdb0cbd91e624f244294ef55ca7b4f84b2bc4a9
+state_head: dbdc9f0ff3faf2207417a413babe62a3a22f0764
 progress:
   total_phases: 5
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 ## Current Position
 
 Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 12 of 15
+Plan: 13 of 15
 Status: Ready to execute
 Last activity: 2026-09-26 — Phase 01 execution started
 
@@ -69,6 +69,8 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P07 | 42 min | 3 tasks | 41 files |
 | Phase 01 P09 | 1h 18m | 3 tasks | 74 files |
 | Phase 01 P08 | 1h 40m | 3 tasks | 30 files |
+| Phase 01 P10 | 1h 35m | 3 tasks | 21 files |
+| Phase 01 P10 | 1h 35m | 3 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -124,6 +126,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: 为统一 drizzle-orm 的 peer 解析上下文，把 kysely 0.29.6 声明进根与 packages/db — better-auth 依赖 kysely，于是 apps/api 与 packages/db 解析到两份不同 peer 后缀的 drizzle-orm 实例，tsc 报出大量 nominal 冲突（SQL / PgColumn 互不兼容）。kysely 本就在依赖树里（better-auth 的传递依赖），显式声明只是让三个 importer 看到同一个 peer 集合；pnpm 不会为未变化的 specifier 重新解析 peer，必须 remove + add 一次 drizzle-orm 才会收敛
 - [Phase 01]: @testing-library/react@16.3.3 + @testing-library/dom@10.4.2 + jsdom@30.1.1 经一次 blocking-human 包合法性 checkpoint 放行（编排器独立核验 registry + 用户裁决，2026-09-27），Plan 02 的 25 包清单之外多出这三个；01-08/10/11/12/14 可直接复用，不需再次 checkpoint — 六个 plan 的验收里都写着 RTL 断言，是一次规划期遗漏而非范围扩张。放行条件三条：锁精确版本、只进根 devDependencies、不得泄漏进生产依赖图（前两条由 tools/ci/test-deps-isolation.test.ts 机械断言；第三条见下方 blocker）
 - [Phase 01]: 「点一项其余四项不变」同时保留穷举纯函数断言与 RTL 点击断言，两者互补 — 纯函数版是穷举（5 scope × 2 值 × 2 起点），RTL 版证明「UI 真的接在那个纯函数上」。只有前者可能接错线，只有后者只是一次抽样
+- [Phase 01]: DATA_INVENTORY 建成表×列粒度的单一真相源（165 条个人信息条目 + 显式豁免清单），四条双向断言 + buildCollectedView 全部做成纯函数；@drift/db 新增 ./inventory 纯子路径导出供 apps/web 测试消费（包入口的连接池边界保持不动） — PRIV-03 的「说明与实际存储字段一致」靠注册表而不是靠人维护；断言与视图构造做成纯函数后，负向 fixture 可以直接喂输入证明非空真，且 RTL 渲染层与 tools/ci 共享同一份词表/视图构造（一份定义、两个消费者）
+- [Phase 01]: privacy.md「我们收集什么」表只列当前真实收集的 12 类（humanLabel 集合与 DATA_INVENTORY 双向相等）；三个尚无数据流的同意项移到表后的如实披露段，隐私中心对应渲染第三态「已授权 · 尚未开始收集」 — 把 5 项同意直接渲染成 5 组「我们收集了…」等于披露尚未发生的收集（T-10-03），与写「匿名」同性质；两份清单分离是 RESEARCH §6.5 的裁决，Phase 7 研究管道落地时集合相等断言与第三态断言会自动翻转方向
+- [Phase 01]: 禁用词扫描核心（BANNED_TERMS/scanBannedTerms）定义在 packages/safety/src/banned-terms.ts 而非 tools/ci 的测试文件里；归一化直接复用 normalizeForRetentionMatch — 渲染层断言在 apps/web（react 只装在 apps/web），源码层在 tools/ci —— 两个消费者必须跑同一张词表，词表不能住在任何一个 .test 文件里（import 另一个测试文件会让 vitest 重复执行被引用例）；挽留词表也按同一原则从 retention-words.ts import
 
 ### Pending Todos
 
@@ -148,6 +153,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T08:45:06.858Z
-Stopped at: Completed 01-09-PLAN.md
+Last session: 2026-09-27T12:58:52.033Z
+Stopped at: Completed 01-10-PLAN.md
 Resume file: None
