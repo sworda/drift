@@ -15,3 +15,4 @@ export * from './care-cards.ts';
 export * from './gateway.ts';
 export * from './egress.ts';
 export * from './retention-words.ts';
+export * from './banned-terms.ts';

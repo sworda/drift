@@ -8,6 +8,10 @@
 // 每条断言都配一个**注入式**负向输入 —— 把坏数据喂给同一个纯函数，证明它真的会红，
 // 而不是只在执行者手里改坏过一次源码（handoff 惯例：破坏验证写成测试内注入）。
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { getTableColumns, is } from 'drizzle-orm';
 import { pgTable, PgTable, text } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
@@ -55,6 +59,26 @@ const ALL_GRANTED: Record<ConsentScope, boolean> = {
   research_l1: true,
   persona_evolution: true,
 };
+
+const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+const PRIVACY_MD = join(REPO_ROOT, 'apps/web/content/legal/privacy.md');
+
+/**
+ * 解析 privacy.md「我们收集什么」表的条目（第一列）。
+ * 只认该章节内的表格行；章节边界是下一个 `## ` 标题。
+ */
+function parseCollectedSectionRows(privacyMd: string): string[] {
+  const start = privacyMd.indexOf('## 我们收集什么');
+  if (start < 0) throw new Error('privacy.md 缺少「我们收集什么」章节');
+  const rest = privacyMd.slice(start);
+  const nextSection = rest.indexOf('\n## ', 1);
+  const section = nextSection < 0 ? rest : rest.slice(0, nextSection);
+  return section
+    .split('\n')
+    .filter((line) => line.startsWith('|'))
+    .map((line) => (line.split('|')[1] ?? '').trim())
+    .filter((cell) => cell.length > 0 && cell !== '数据' && !/^-+$/u.test(cell));
+}
 
 describe('四条双向断言（真实 schema × 真实注册表）', () => {
   it('第 1–4 条全部通过：22 张表的每一列都被覆盖，且每条引用都真实存在', () => {
@@ -185,5 +209,36 @@ describe('「我们收集了什么」视图构造（RESEARCH §6.5）', () => {
     for (const scope of CONSENT_SCOPES) {
       expect(occurrences.get(scope), `scope ${scope} 应恰出现一次`).toBe(1);
     }
+  });
+});
+
+describe('privacy.md「我们收集什么」与 DATA_INVENTORY 的集合相等（PRIV-03）', () => {
+  it('两个方向的差集都为空 —— 漏列与多列都失败', () => {
+    // SKIPPED_CHECKS 的 legal-collected-section-matches-inventory 行曾登记这条断言的
+    // 缺席；本测试落地后该行已删除。风险形态是**漏列**：新增一张含个人信息的表而忘了
+    // 写进政策，正向存在性断言（章节在场）看不见，而 PRIV-03 要求的正是说明与实现一致。
+    const rows = parseCollectedSectionRows(readFileSync(PRIVACY_MD, 'utf8'));
+    const labels = new Set(DATA_INVENTORY.filter((entry) => entry.containsPersonalInfo).map((entry) => entry.humanLabel));
+
+    const missingInPolicy = [...labels].filter((label) => !rows.includes(label)).sort();
+    const extraInPolicy = rows.filter((row) => !labels.has(row)).sort();
+
+    expect(
+      { missingInPolicy, extraInPolicy },
+      '政策漏列：' +
+        JSON.stringify(missingInPolicy) +
+        '；政策多列（披露了不存在的收集）：' +
+        JSON.stringify(extraInPolicy),
+    ).toEqual({ missingInPolicy: [], extraInPolicy: [] });
+  });
+
+  it('注入式非空真：故意漏写一个条目时，两个方向的报告都要点名它', () => {
+    const rows = parseCollectedSectionRows(readFileSync(PRIVACY_MD, 'utf8'));
+    const labels = new Set(DATA_INVENTORY.filter((entry) => entry.containsPersonalInfo).map((entry) => entry.humanLabel));
+    const tampered = rows.filter((row) => row !== '前端错误');
+    const missing = [...labels].filter((label) => !tampered.includes(label));
+    const extra = tampered.filter((row) => !labels.has(row));
+    expect(missing).toEqual(['前端错误']);
+    expect(extra).toEqual([]);
   });
 });
