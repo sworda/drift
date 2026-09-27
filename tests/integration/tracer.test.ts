@@ -301,7 +301,11 @@ describe('tracer —— 一条真实消息打穿全链路', () => {
       .select({
         purpose: llmCall.purpose,
         provider: llmCall.provider,
+        requestedModel: llmCall.requestedModel,
         modelSnapshot: llmCall.modelSnapshot,
+        resolvedModel: llmCall.resolvedModel,
+        priceTier: llmCall.priceTier,
+        promptVersion: llmCall.promptVersion,
         turnId: llmCall.turnId,
         createdAt: llmCall.createdAt,
         inputHash: llmCall.inputHash,
@@ -316,6 +320,20 @@ describe('tracer —— 一条真实消息打穿全链路', () => {
     expect(calls[0]?.modelSnapshot).not.toBe(calls[1]?.modelSnapshot);
     // 不存 prompt 正文，只存输入哈希。
     for (const row of calls) expect(row.inputHash.startsWith('sha256:')).toBe(true);
+
+    // Plan 05：requested / resolved **分两列**落库（STACK §15.9 第 3 条）。
+    // 落库无条件发生 —— 两者一致时也要写，否则 resolved_model 的日 diff 在
+    // 「厂商还没换模型」的日子里无值可比，而那正是它需要建立基线的那些天。
+    for (const row of calls) {
+      expect(row.requestedModel.length, `${row.purpose} 的 requested_model 为空`).toBeGreaterThan(0);
+      expect(
+        (row.resolvedModel ?? '').length,
+        `${row.purpose} 的 resolved_model 为空 —— 日 diff 将无值可比`,
+      ).toBeGreaterThan(0);
+      // 计价档位：火山方舟与智谱分段计费，不记档位算不出真实成本，而 llm_call 是
+      // append-only 表 —— 等到有人去看成本时补不了历史行。
+      expect((row.priceTier ?? '').length, `${row.purpose} 的 price_tier 为空`).toBeGreaterThan(0);
+    }
 
     // SAFE-01 的顺序断言，原样用 RESEARCH §4.1 的那条 SQL。
     const misordered = await ownerSql<{ readonly n: number }[]>`

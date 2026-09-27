@@ -38,16 +38,33 @@ jobs:
         run: pnpm run test:probes
 
       - name: resolved_model 日 diff
-        # 脚本由 Plan 05（Model Router）落地。**缺失时非零退出**而不是跳过：
-        # 一条「文件不存在就当通过」的检查，与一条不存在的检查没有区别。
-        # 已登记 SKIPPED_CHECKS.md 的 nightly-model-snapshot-diff。
+        # 脚本已由 Plan 05 落地，所以这里是**直接调用**，不再有「文件不存在就报错」
+        # 的占位分支（SKIPPED_CHECKS.md 的 nightly-model-snapshot-diff 因此解除）。
+        #
+        # 这一步**没有**任何容错开关：nightly 整体允许不阻断合并，但脚本失败必须让
+        # job 红 —— 一条失败了还是绿的检查与一条不存在的检查没有区别。
+        #
+        # job summary 先写、再跑脚本：这样「变化必须在下一个 PR 前被人确认」这句话
+        # 在脚本失败的那一次也会出现在 summary 里，而不需要一个「失败也执行」的条件
+        # 表达式（那类构造在本仓库的 CI 里是被禁止的形状）。
+        #
+        # DATABASE_URL 在 shell 里拼而不是写在 `env:` 里：它要用的
+        # POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_HOST_PORT 是**自建 runner 进程
+        # 环境里**的值（compose 读的是同一组），而 workflow 级 `env:` 的表达式上下文
+        # 看不见 runner 的进程环境。故意不给 password 默认值 —— 缺了就连不上、立刻红。
         run: |
-          if [ -f tools/ci/model-snapshot-diff.mjs ]; then
+          {
+            echo "### resolved_model 日 diff"
+            echo ""
+            echo "厂商可以在不改 model id 的前提下把它背后的快照换掉（Anthropic 官方文档"
+            echo "书面承认服务侧基础设施变更会改变可观测行为），而这不会让任何测试变红。"
+            echo ""
+            echo "**model_snapshot 变化必须在下一个 PR 前被人确认。** 确认后人工修改"
+            echo "compliance/model-snapshot-baseline.json 并作为一次 commit 提交；"
+            echo "脚本不会自己改基线（自动更新会让告警自我消解）。"
+          } >> "$GITHUB_STEP_SUMMARY"
+          DATABASE_URL="postgres://${POSTGRES_USER:-drift}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB:-drift}" \
             node tools/ci/model-snapshot-diff.mjs
-          else
-            echo "tools/ci/model-snapshot-diff.mjs 尚未落地（解除条件：Plan 05）。" >&2
-            exit 1
-          fi
 
       - name: registered_users 日对账
         # 脚本由 Plan 13 落地（COMPLY-10 四条抗辩里的「<=10 用户」那一条的对账

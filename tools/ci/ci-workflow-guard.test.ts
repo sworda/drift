@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -63,12 +63,38 @@ describe('CI 阻断规则（V.4）', () => {
     }
   });
 
-  it('nightly 对两个尚未落地的脚本是「缺失即失败」，不是跳过', () => {
+  it('nightly 对尚未落地的脚本是「缺失即失败」，不是跳过', () => {
     const text = workflow('nightly.yml');
-    for (const script of ['tools/ci/model-snapshot-diff.mjs', 'tools/ci/publicness-reconcile.mjs']) {
-      expect(text).toContain(`[ -f ${script} ]`);
+    // Plan 13 的对账脚本还没落地，占位分支必须保留「缺失即 exit 1」的形状。
+    expect(text).toContain('[ -f tools/ci/publicness-reconcile.mjs ]');
+    expect(text.match(/exit 1/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+  });
+
+  it('nightly 直接调用已落地的 model-snapshot-diff，且该步骤没有容错开关', () => {
+    const text = workflow('nightly.yml');
+    // Plan 05 落地了脚本，于是占位分支必须**消失**：留着 `[ -f ]` 判断等于保留
+    // 一条「将来某次改名把文件弄丢了也照样绿」的路径。
+    expect(
+      text.includes('[ -f tools/ci/model-snapshot-diff.mjs ]'),
+      'model-snapshot-diff.mjs 已落地，nightly 不该再用「文件存在才跑」的占位分支',
+    ).toBe(false);
+    expect(text).toContain('node tools/ci/model-snapshot-diff.mjs');
+    expect(existsSync(`${REPO_ROOT}tools/ci/model-snapshot-diff.mjs`)).toBe(true);
+    // nightly 允许不阻断合并，但脚本失败必须让 job 红。
+    for (const token of BYPASS_TOKENS) {
+      expect(text.includes(token), `nightly.yml 出现了 "${token}"`).toBe(false);
     }
-    // 两个 else 分支各有一条 exit 1。
-    expect(text.match(/exit 1/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  it('日 diff 的基线文件在仓库里，且脚本不会自己改它', () => {
+    // 基线必须是一个**人工** commit 的产物：自动更新会让告警在第二天自我消解。
+    expect(existsSync(`${REPO_ROOT}compliance/model-snapshot-baseline.json`)).toBe(true);
+    const script = readFileSync(`${REPO_ROOT}tools/ci/model-snapshot-diff.mjs`, 'utf8');
+    expect(script).toContain('model-snapshot-baseline');
+    for (const mutator of ['writeFile', 'writeFileSync', 'appendFile']) {
+      expect(script.includes(mutator), `日 diff 脚本含 ${mutator} —— 它可能会自动改写基线`).toBe(
+        false,
+      );
+    }
   });
 });

@@ -346,3 +346,42 @@ describe('PLAT-07 / 探针：两条类型层约束有负向 fixture 守着', () 
     ).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('resolved_model 日 diff：告警本身不是空真的', () => {
+  function runDiff(args: readonly string[], env: NodeJS.ProcessEnv = process.env): ReturnType<typeof spawnSync> {
+    return spawnSync(process.execPath, ['tools/ci/model-snapshot-diff.mjs', ...args], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      env,
+    });
+  }
+
+  it('--dry-run 做出判定并退出 0（校验基线格式，不连库）', () => {
+    const run = runDiff(['--dry-run']);
+    const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
+    expect(run.status, output).toBe(0);
+    expect(
+      output.includes('OK no model drift') || output.includes('DRIFT '),
+      `脚本没有做出任何判定：\n${output}`,
+    ).toBe(true);
+  });
+
+  it('--self-test 必须非零退出：人造的「出现新模型」输入真的被判成漂移', () => {
+    const run = runDiff(['--self-test']);
+    const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
+    // 非零退出**就是**这个开关的正确结果 —— 它是这条告警的负向 fixture。
+    expect(run.status, `人造的新模型没有让脚本失败，这条日 diff 是空真的：\n${output}`).not.toBe(0);
+    expect(output).toContain('DRIFT ');
+    expect(output, `自测判定本身坏了：\n${output}`).toContain('SELF-TEST OK');
+    expect(output).not.toContain('SELF-TEST BROKEN');
+  });
+
+  it('缺 DATABASE_URL 时非零退出，而不是当成「没有漂移」', () => {
+    const env = { ...process.env };
+    delete env['DATABASE_URL'];
+    const run = runDiff([], env);
+    const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
+    expect(run.status, output).not.toBe(0);
+    expect(output).not.toContain('OK no model drift');
+  });
+});
