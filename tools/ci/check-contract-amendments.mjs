@@ -123,7 +123,10 @@ export function checkAmendments(files) {
   // ---- A-03 五项同意 ----
   const SCOPES = ['basic_service', 'sensitive_pi', 'research_l0', 'research_l1', 'persona_evolution'];
   {
-    const priv01 = (requirements.match(/^- \[ \] \*\*PRIV-01\*\*.*$/m) || [''])[0];
+    // 复选框状态必须两态都认（`[ ]` 与 `[x]`）。只认未勾选态时，PRIV-01 一旦按正常
+    // 生命周期被 requirements.mark-complete 标成 [x]，本条就会报「找不到条目行」而恒红
+    // —— 断言在一个预期内的事件上崩掉，而不是在真实违反上变红。self-test 第 5 条钉住两态。
+    const priv01 = (requirements.match(/^- \[[ xX]\] \*\*PRIV-01\*\*.*$/m) || [''])[0];
     const missing = SCOPES.filter((s) => !priv01.includes(s));
     push(
       'A03_FIVE_CONSENTS_REQUIREMENTS',
@@ -301,6 +304,26 @@ function runSelfTest() {
   const r4 = checkAmendments({ ...live, requirements: '个保法第十四条禁止捆绑同意\n' });
   const c4 = pick(r4, 'NO_FOUR_CONSENTS_IN_LIVE_DOCS');
   if (!c4 || c4.ok !== true) bail('FAIL self-test: pattern hits legal citation');
+
+  // 5) 两态：PRIV-01 被标记完成（`- [x]`）后仍必须被找到。未勾选态同样必须被找到。
+  //    这条存在的理由是一次真实回归：提取式原本只认 `- [ ]`，Plan 09 标记 PRIV-01 完成后
+  //    A03_FIVE_CONSENTS_REQUIREMENTS 立刻报「找不到条目行」。
+  const priv01Body =
+    ': 用户在注册时看到五个**可独立开关、互不捆绑**的同意项：`basic_service`、`sensitive_pi`、`research_l0`、`research_l1`、`persona_evolution`\n';
+  for (const box of ['[ ]', '[x]']) {
+    const rBox = checkAmendments({ ...live, requirements: '- ' + box + ' **PRIV-01**' + priv01Body });
+    const cBox = pick(rBox, 'A03_FIVE_CONSENTS_REQUIREMENTS');
+    if (!cBox || cBox.ok !== true) {
+      bail('FAIL self-test: PRIV-01 条目行在复选框状态 ' + box + ' 下未被识别（提取式只认单一状态）');
+    }
+  }
+  // 反向：两态都认，但缺 scope 标识时仍必须判失败 —— 否则上面放宽的是「找不到就算了」。
+  const rMissing = checkAmendments({
+    ...live,
+    requirements: '- [x] **PRIV-01**: 用户在注册时看到五个同意项：`basic_service`\n',
+  });
+  const cMissing = pick(rMissing, 'A03_FIVE_CONSENTS_REQUIREMENTS');
+  if (!cMissing || cMissing.ok !== false) bail('FAIL self-test: 缺 scope 标识时 A03 未判失败');
 
   console.log('self-test OK —— 负向输入被正确判失败的断言 id：');
   console.log('  uiSpec fixture     -> ' + mustFail.join(', ') + '（三条全部 ok:false）');
