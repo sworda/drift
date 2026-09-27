@@ -3,11 +3,11 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-09-27T04:57:39.017Z"
+stopped_at: Completed 01-13-PLAN.md
+last_updated: "2026-09-27T05:49:43.590Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
-state_head: 8b71be34731dc9b888e01b291bc077afb3bed136
+state_head: 2df7ef5e65ffa404845a9e6944aa8ff14358f5e9
 progress:
   total_phases: 5
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 ## Current Position
 
 Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 7 of 15
+Plan: 8 of 15
 Status: Ready to execute
 Last activity: 2026-09-26 — Phase 01 execution started
 
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P04 | 21 min | 3 tasks | 77 files |
 | Phase 01 P05 | 30 min | 3 tasks | 35 files |
 | Phase 01 P06 | 51 min | 3 tasks | 21 files |
+| Phase 01 P13 | 38 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,11 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: COMPLY-11 落成显式空集登记，front-matter 的 egress_hash 与 EGRESS_POINTS 绑定且不许 CI 自动更新 — 空集结论只在当时的出口集合上成立；自动更新哈希会绕过人工复核，把登记变成装饰
 - [Phase 01]: 挽留话术改为网关内运行时拦截（词表一份定义，命中即不产出 GatedText 并写 safety_event） — 源码 grep 抓不到模型生成的挽留话术；验收目标是触发率恒为 0 而非低，故归一化去标点与零宽字符，接受极少数过拦截
 - [Phase 01]: safetyGateway 的拒绝态沿用 Plan 04 的 outcome 判别式，不改成 PLAN 写的 ok:false — 两个判别式可以互相矛盾（ok:true + outcome:refused），而「不可表达」是这套类型方案的全部价值
+- [Phase 01]: checklist 的勾选语义定为「已裁决且留证」而非「已做完」：裁决只有 implemented 与 not_applicable，后者仅当四条抗辩全部成立时合法；基线首签因此如实记为六条 not_applicable — 六条必需条目（安全评估 / 算法备案 / 未成年人模式 / 危机干预 / 2 小时提醒 / 申诉渠道）在 Phase 1 一条都没实装。按 plan 字面写一份「全部已勾选」的 checklist 等于伪造一份合规记录 —— 与在隐私文案里写「匿名」同一性质。改成裁决制之后，四条抗辩任一破裂时 not_applicable 立刻变成非法裁决，于是门禁反而更强。
+- [Phase 01]: compliance/dpa/ 按路由表全部 provider 各一份（四份，不是 plan 预期的两份），「必须已签」的判据绑在 enabled 上；两家已启用 provider 尚未签署，如实登记 SKIPPED_CHECKS 而不是编造 signed_at — ROUTES 里有 volcengine / zhipu / aliyun / anthropic 四个 provider，plan 只预期两份 DPA，集合断言按字面实现必然红。PLAT-05 不允许路由表留空洞，而委托处理在真实调用发生时才发生 —— 把判据绑在 enabled 上既不虚构协议也不留放行口子。LLM_PROVIDER_MODE 默认 mock 故委托处理尚未发生；缺口作为一次检查强度降级登记，解除条件含「首次 live 调用之前」。
+- [Phase 01]: registered_users 日对账告警登记为第五条 EGRESS_POINTS 出口（reconcile.publicnessWebhook，carriesUserText: false），并同步 egress_hash 与 COMPLY-11 登记；刻意不复用 notifyOperator、也不抽一个接受 string 的投递函数 — 它是生产源码里一条新的出站网络路径，不登记就正是这份注册表要防的失效模式。复用 notifyOperator 要么谎报一次危机，要么把 AcuteAlert 放宽成能装任何东西的类型；抽 postWecomText(content: string) 更糟 —— 接受任意字符串的导出投递函数正是 GatedText 方案要堵的缺口（AST 扫描看不见 string）。代价是两处 fetch 可能分叉，收益是两条出口的载荷类型各自都不可能承载文本。
+- [Phase 01]: publication 静态扫描覆盖四种加表形态而不只是 ALTER ADD TABLE，且列清单里解析不出类型的列一律 fail-closed — CREATE PUBLICATION FOR TABLE 是同一件事的另一种写法，FOR ALL TABLES 与 ADD TABLES IN SCHEMA 连表名都不必写 —— 只认 ADD TABLE 的扫描器会把这三种写法当成「没有加过任何表」而放行，那是比裸表名更彻底的绕过。解析不出类型意味着无法证明它不是向量列，唯一安全的方向是失败。
+- [Phase 01]: 日对账不挂进 pg-boss schedule：执行点是 nightly workflow；job 模块只提供唯一一份判定与投递实现并留下 registerPublicnessReconcile 供后续 plan 调用 — apps/api 的镜像不 COPY compliance/，运行中的进程读不到 git 声明的 registered_users。注册 schedule 只有两种收场：给它一个编造的声明值（对账拿运行时计数与自己比，永远相等，正是本 plan 禁止的装饰性门禁），或者让作业每天失败一次。nightly workflow 有完整工作树，是此刻唯一能真的对账的地方。
 
 ### Pending Todos
 
@@ -120,6 +126,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T04:57:17.687Z
-Stopped at: Completed 01-06-PLAN.md
+Last session: 2026-09-27T05:49:00.382Z
+Stopped at: Completed 01-13-PLAN.md
 Resume file: None
