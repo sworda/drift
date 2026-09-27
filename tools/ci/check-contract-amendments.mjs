@@ -168,11 +168,14 @@ export function checkAmendments(files) {
 
   // ---- SAFE-16 ----
   {
-    const ok = /^- \[ \] \*\*SAFE-16\*\*/m.test(requirements);
+    // 复选框状态必须两态都认（同 94ca966 对 PRIV-01 的修复）：SAFE-16 由 Plan 07/08
+    // 按正常生命周期标记完成后是 - [x]，只认未勾选态会让本条在预期内事件上恒红。
+    // self-test 第 6 条钉住两态。
+    const ok = /^- \[[ xX]\] \*\*SAFE-16\*\*/m.test(requirements);
     push(
       'SAFE16_IN_REQUIREMENTS',
       ok,
-      ok ? 'requirements 含 SAFE-16 条目' : 'requirements 缺「- [ ] **SAFE-16**:」条目',
+      ok ? 'requirements 含 SAFE-16 条目' : 'requirements 缺「- [ ] / - [x] **SAFE-16**:」条目',
     );
   }
 
@@ -304,6 +307,17 @@ function runSelfTest() {
   const r4 = checkAmendments({ ...live, requirements: '个保法第十四条禁止捆绑同意\n' });
   const c4 = pick(r4, 'NO_FOUR_CONSENTS_IN_LIVE_DOCS');
   if (!c4 || c4.ok !== true) bail('FAIL self-test: pattern hits legal citation');
+
+  // 6) 两态：SAFE-16 被标记完成（`- [x]`）后仍必须被找到 —— 与第 5 条同一次失效模式
+  //（SAFE-16 在 01-08 的 update_requirements 之后触发了同一类恒红）。
+  const safe16Body = ': acute（crisis 级）事件须在有界时间内投递到运营者告警通道。\n';
+  for (const box of ['[ ]', '[x]']) {
+    const rBox = checkAmendments({ ...live, requirements: '- ' + box + ' **SAFE-16**' + safe16Body });
+    const cBox = pick(rBox, 'SAFE16_IN_REQUIREMENTS');
+    if (!cBox || cBox.ok !== true) {
+      bail('FAIL self-test: SAFE-16 条目行在复选框状态 ' + box + ' 下未被识别（提取式只认单一状态）');
+    }
+  }
 
   // 5) 两态：PRIV-01 被标记完成（`- [x]`）后仍必须被找到。未勾选态同样必须被找到。
   //    这条存在的理由是一次真实回归：提取式原本只认 `- [ ]`，Plan 09 标记 PRIV-01 完成后
