@@ -67,16 +67,30 @@ jobs:
             node tools/ci/model-snapshot-diff.mjs
 
       - name: registered_users 日对账
-        # 脚本由 Plan 13 落地（COMPLY-10 四条抗辩里的「<=10 用户」那一条的对账
-        # 方向，D-23）。同样缺失即失败。
-        # 已登记 SKIPPED_CHECKS.md 的 nightly-publicness-reconcile。
+        # 脚本已由 Plan 13 落地，所以这里是**直接调用**，不再有「文件不存在就报错」的
+        # 占位分支（SKIPPED_CHECKS.md 的 nightly-publicness-reconcile 因此解除）。
+        #
+        # 判定方向是告警，不是自动写回：脚本没有任何写文件能力，也不动版本库。不相等或
+        # 超过上限时它非零退出并发 IM 告警，然后由**人工**更新 publicness.json 并新增一份
+        # 逐条裁决的 CHECKLIST —— 自动写回会绕过 D-08 的签字机制。
+        #
+        # DATABASE_URL 与上一步同样在 shell 里拼：它要用的 POSTGRES_* 是自建 runner 进程
+        # 环境里的值，而 workflow 级 env 的表达式上下文看不见它们。WECOM_WEBHOOK_URL 同样
+        # 来自本机环境（D-02：凭据只存在境内本机），缺了就在对账不通过时立刻红 ——
+        # 「告警其实没发出去」必须是一次失败，不能是一行日志。
         run: |
-          if [ -f tools/ci/publicness-reconcile.mjs ]; then
+          {
+            echo "### registered_users 日对账"
+            echo ""
+            echo "git 声明的注册用户数（compliance/publicness.json）与数据库里 invite_code"
+            echo "中 used_by 非空的计数对账。不相等即告警；超过 10 时四条抗辩之一已破裂，"
+            echo "下一次 PR 会由 fast job 的 USERS_WITHIN_CAP 阻断发布。"
+            echo ""
+            echo "**脚本不会自己改 publicness.json。** 核实后人工更新它，并在同一次变更里"
+            echo "新增一份逐条裁决的 compliance/CHECKLIST-<日期>.md。"
+          } >> "$GITHUB_STEP_SUMMARY"
+          DATABASE_URL="postgres://${POSTGRES_USER:-drift}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB:-drift}" \
             node tools/ci/publicness-reconcile.mjs
-          else
-            echo "tools/ci/publicness-reconcile.mjs 尚未落地（解除条件：Plan 13）。" >&2
-            exit 1
-          fi
 
       - name: 失败时发 IM 告警
         if: failure()

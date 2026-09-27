@@ -1,5 +1,5 @@
 ---
-egress_hash: sha256:44d59022a48b447fe3d425ebd836556465057c84adb55abaa632c6561ca2068e
+egress_hash: sha256:64cce2d35c35482f61df8ff06fc1a8a7589a65b4fd187d62b840533d7db0a70c
 reviewed_at: 2026-09-27
 reviewed_by: zexueli
 ---
@@ -18,7 +18,7 @@ reviewed_by: zexueli
 
 ## 出口逐条核实
 
-下表逐条覆盖 `packages/safety/src/egress.ts` 的 `EGRESS_POINTS` 四项。判据只有两种：
+下表逐条覆盖 `packages/safety/src/egress.ts` 的 `EGRESS_POINTS` 五项。判据只有两种：
 **它带标识**，或者**它不构成「对外提供生成合成内容」**。没有第三种。
 
 ### 1. `ws.deliver` —— WebSocket 下发（`apps/api/src/ws/server.ts`）
@@ -57,6 +57,26 @@ Plan 11 补齐，届时本条须连同 `egress_hash` 一起重新复核。
 该出口同时是 D-09 引入的**一条新的个人信息流向**（向运营者披露「某用户触发了二级
 危机」这一事实）。它在隐私中心「我们收集了什么」中如实列明（PRIV-11），与本条的
 「不含对话内容」结论一致。
+
+### 5. `reconcile.publicnessWebhook` —— 公开性对账告警（`apps/api/src/worker/jobs/publicness-reconcile.ts`）
+
+**判据：不构成「对外提供生成合成内容」。** 载荷类型 `ReconcileReport` 只有四个字段
+（`declared` / `actual` / `matches` / `withinCap`）—— 两个计数加两个布尔判定，**类型中
+不存在任何文本字段**，因此该出口从不传输任何生成内容，也从不传输任何用户标识。它在
+`EGRESS_POINTS` 中登记为 `carriesUserText: false`，并由 `RECONCILE_REPORT_FIELDS_MATCH_TYPE`
+这条编译期断言守着字段集合：给 `ReconcileReport` 加一个字段而不改字段清单即编译失败。
+
+它与第 4 条是**两个函数而不是一个**，这是刻意的。复用 `notifyOperator` 要么谎报一次危机
+（`AcuteAlert.riskLevel` 恒为 `'crisis'`），要么把 `AcuteAlert` 放宽成一个能装任何东西的
+类型 —— 后者直接废掉「载荷里不存在文本字段」这条编译期保证。抽一个
+`postWecomText(content: string, …)` 更糟：一个接受任意字符串的导出投递函数，正是
+`GatedText` 方案要堵的那个缺口（AST 扫描只看得见参数类型里的 `GatedText`，看不见
+`string`）。代价是两处各有十几行 fetch 可能分叉，收益是两条出口的载荷类型各自都不可能
+承载文本 —— 这笔交换是本条登记的实质内容。
+
+该出口与第 4 条一样是一条**个人信息流向**吗？不是：它披露的是两个聚合计数，不涉及任何
+可识别到个人的信息。它披露的是「本平台有几个注册用户」这一运营事实（COMPLY-10 的四条
+抗辩之一），受众是运营者本人。
 
 ## 复核触发条件
 

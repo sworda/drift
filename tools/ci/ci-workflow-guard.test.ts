@@ -63,11 +63,26 @@ describe('CI 阻断规则（V.4）', () => {
     }
   });
 
-  it('nightly 对尚未落地的脚本是「缺失即失败」，不是跳过', () => {
+  it('nightly 直接调用已落地的 publicness-reconcile，且不留占位分支', () => {
     const text = workflow('nightly.yml');
-    // Plan 13 的对账脚本还没落地，占位分支必须保留「缺失即 exit 1」的形状。
-    expect(text).toContain('[ -f tools/ci/publicness-reconcile.mjs ]');
-    expect(text.match(/exit 1/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+    // Plan 13 落地了脚本，于是占位分支必须**消失**：留着 `[ -f ]` 判断等于保留一条
+    // 「将来某次改名把文件弄丢了也照样绿」的路径（与 model-snapshot-diff 同一理由）。
+    expect(
+      text.includes('[ -f tools/ci/publicness-reconcile.mjs ]'),
+      'publicness-reconcile.mjs 已落地，nightly 不该再用「文件存在才跑」的占位分支',
+    ).toBe(false);
+    expect(text).toContain('node tools/ci/publicness-reconcile.mjs');
+    expect(existsSync(`${REPO_ROOT}tools/ci/publicness-reconcile.mjs`)).toBe(true);
+  });
+
+  it('对账脚本不会自己改写公开性状态（自动写回会绕过 D-08 的签字机制）', () => {
+    const script = readFileSync(`${REPO_ROOT}tools/ci/publicness-reconcile.mjs`, 'utf8');
+    for (const mutator of ['writeFile', 'writeFileSync', 'appendFile', 'git commit']) {
+      expect(
+        script.includes(mutator),
+        `对账脚本含 ${mutator} —— 它可能会自动改写 publicness.json 或自动提交`,
+      ).toBe(false);
+    }
   });
 
   it('nightly 直接调用已落地的 model-snapshot-diff，且该步骤没有容错开关', () => {

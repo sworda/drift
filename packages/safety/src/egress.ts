@@ -43,11 +43,12 @@ export interface EgressPoint {
 }
 
 /**
- * Phase 1 的四个出站出口。
+ * Phase 1 的五个出站出口。
  *
- * 前三个承载对话文本，签名只接受 GatedText。第四个（acute 告警）是 D-09 引入的一条
- * **新的个人信息流向**：它是出口，但不得携带对话文本 —— 告警 JSON 不会有人去读，
- * 所以「它带上了对话片段」这件事只能靠断言发现，不能靠复核发现。
+ * 前三个承载对话文本，签名只接受 GatedText。后两个是运营者告警：acute 告警（D-09）与
+ * 公开性对账告警（D-23）。两者都是出口，但都不得携带对话文本 —— 告警 JSON 不会有人去
+ * 读，所以「它带上了对话片段」这件事只能靠断言发现，不能靠复核发现。两者各自的载荷类型
+ * 里都不存在任何文本字段，并各有一条编译期的字段集合断言守着这件事。
  */
 export const EGRESS_POINTS = [
   {
@@ -70,6 +71,13 @@ export const EGRESS_POINTS = [
     module: 'apps/api/src/modules/safety/alert.ts',
     fn: 'notifyOperator',
     // ← D-09 的 IM 告警：是出口，但不得携带对话文本（SAFE-16）。
+    carriesUserText: false,
+  },
+  {
+    id: 'reconcile.publicnessWebhook',
+    module: 'apps/api/src/worker/jobs/publicness-reconcile.ts',
+    fn: 'deliverReconcileAlert',
+    // ← D-23 的公开性对账告警：载荷类型只有两个计数与两个布尔判定，没有文本字段。
     carriesUserText: false,
   },
 ] as const satisfies readonly EgressPoint[];

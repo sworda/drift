@@ -244,14 +244,15 @@ function scanProductionOnce(): ScannedEgress[] {
 }
 
 describe('EGRESS_POINTS 注册表（RESEARCH §3.4）', () => {
-  it('恰好四项，id 与承载文本标记如实', () => {
+  it('恰好五项，id 与承载文本标记如实', () => {
     expect(EGRESS_POINTS.map((point) => point.id)).toEqual([
       'ws.deliver',
       'db.insertCharacterMessage',
       'export.renderLine',
       'alert.acuteWebhook',
+      'reconcile.publicnessWebhook',
     ]);
-    // acute 告警是出口但不承载对话文本（SAFE-16），因此不参与 GatedText 集合相等。
+    // 两条运营者告警是出口但不承载对话文本（SAFE-16 / D-23），因此不参与 GatedText 集合相等。
     expect(TEXT_CARRYING_EGRESS_POINTS.map((point) => point.id)).toEqual([
       'ws.deliver',
       'db.insertCharacterMessage',
@@ -582,13 +583,13 @@ describe('绑定断言 3：acute 告警载荷不含对话文本（SAFE-16 / T-06
     });
   });
 
-  it('第四个出口不参与 GatedText 集合相等（它的约束是「不含对话文本」，不是「只接受 GatedText」）', () => {
-    const alertPoint = EGRESS_POINTS.find((point) => point.id === 'alert.acuteWebhook');
-    expect(alertPoint).toBeDefined();
-    expect(alertPoint && 'carriesUserText' in alertPoint ? alertPoint.carriesUserText : true).toBe(
-      false,
-    );
-    expect(TEXT_CARRYING_EGRESS_POINTS.map((point) => point.id)).not.toContain('alert.acuteWebhook');
+  it('两条告警出口都不参与 GatedText 集合相等（约束是「不含对话文本」，不是「只接受 GatedText」）', () => {
+    for (const id of ['alert.acuteWebhook', 'reconcile.publicnessWebhook']) {
+      const point = EGRESS_POINTS.find((candidate) => candidate.id === id);
+      expect(point, `注册表里没有 ${id}`).toBeDefined();
+      expect(point && 'carriesUserText' in point ? point.carriesUserText : true).toBe(false);
+      expect(TEXT_CARRYING_EGRESS_POINTS.map((candidate) => candidate.id)).not.toContain(id);
+    }
   });
 });
 
