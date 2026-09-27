@@ -7,3 +7,8 @@ dist/
 var/export-artifacts/
 *.tsbuildinfo
 .DS_Store
+
+# GSD 编排器/会话的运行时状态（含 PID 与 session id）—— 每次会话都会变，入仓只会
+# 产生无意义的 diff，并让「这次改动到底改了什么」变难读。
+.gsd/
+.planning/milestone.lock
