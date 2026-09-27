@@ -33,6 +33,17 @@ export type WsUpstream = z.infer<typeof WsUpstream>;
 
 // ── 下行 ────────────────────────────────────────────────────────────────────
 
+/**
+ * 紧急联系人联络状态（SAFE-04 / R1.23）。四态由服务端 contact_attempt.status 驱动，
+ * 前端不自行推导也不得自行计时（超时权威在服务端 —— 与 COMPLY-03 同一条原则）。
+ *
+ * ⚠️ 取值域与 @drift/safety 的 CONTACT_ATTEMPT_STATUSES 同源分叉声明，一致性由
+ * tools/ci/crisis-ui-contract.test.ts 的三方集合相等断言守着（渲染层 copy.ts 是
+ * 第三方）。分叉的形态是某个分支静默渲染不出四态之一，而没有任何编译错误。
+ */
+export const SafetyContactStatus = z.enum(['pending', 'delivered', 'failed', 'unavailable']);
+export type SafetyContactStatus = z.infer<typeof SafetyContactStatus>;
+
 export const DisclosureSchema = z.object({
   kind: z.literal('ai_generated'),
   labeledAt: z.iso.datetime(),
@@ -79,6 +90,25 @@ export const WsDownstream = z.discriminatedUnion('type', [
       conversationId: z.string().min(1),
       /** 一级 / 二级。UI 用 Alert 而非 Bubble 渲染（R1.24：组件层区分）。 */
       tier: z.union([z.literal(1), z.literal(2)]),
+    }),
+  }),
+  z.object({
+    type: z.literal('safety.contact_status'),
+    payload: z.object({
+      conversationId: z.string().min(1),
+      /** contact_attempt 行 id。前端据此在重连重建时对上号。 */
+      attemptId: z.string().min(1),
+      status: SafetyContactStatus,
+      /** 联系人姓名。无记录 / 未取到时为 null。 */
+      contactName: z.string().nullable(),
+      /**
+       * 服务端遮蔽后的联系方式（138****1234）。
+       *
+       * ⚠️ 第三方个人信息**只能以遮蔽形态出进程**：协议里不存在未遮蔽的手机号字段
+       *（T-08-03）。改这里的人不许新增任何承载完整号码的列 —— 字段名本身就这条约束的
+       * 机械形式：它叫 contactMasked，不叫别的。
+       */
+      contactMasked: z.string().nullable(),
     }),
   }),
 ]);

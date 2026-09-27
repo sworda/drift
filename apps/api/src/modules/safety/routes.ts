@@ -27,6 +27,7 @@ import { db } from '@drift/db';
 import { env } from '../../config/env.ts';
 import { logError, logEvent } from '../../obs/logger.ts';
 import { OperatorActionRefusedError, ackDelivered, markFailed } from './contact.ts';
+import { publishContactStatusEvent } from './contact-status-event.ts';
 
 const OPERATOR_TOKEN_HEADER = 'x-operator-token';
 
@@ -87,6 +88,9 @@ operatorSafetyRoutes.post('/internal/contact-attempts/:id/ack', async (c) => {
       return c.json({ error: 'not_pending' }, 409);
     }
     logEvent('contact_attempt.delivered', { contactAttemptStatus: 'delivered' });
+    // 推进已落库 ⇒ 广播给正盯着二级卡片的用户（客户端不在线时返回 0，重连重建补上）。
+    // 投递失败不影响响应：delivered 是真人已通话的事实，不因一条 WS 没送出去而撤销。
+    await publishContactStatusEvent(db, c.req.param('id'));
     return c.json({ status: 'delivered' }, 200);
   } catch (error) {
     if (error instanceof OperatorActionRefusedError) {
@@ -118,6 +122,8 @@ operatorSafetyRoutes.post('/internal/contact-attempts/:id/failed', async (c) => 
     });
     if (!advanced) return c.json({ error: 'not_pending' }, 409);
     logEvent('contact_attempt.failed', { contactAttemptStatus: 'failed' });
+    // 同上：状态先落库，事件是通知不是留证。
+    await publishContactStatusEvent(db, c.req.param('id'));
     return c.json({ status: 'failed' }, 200);
   } catch (error) {
     if (error instanceof OperatorActionRefusedError) {

@@ -36,6 +36,7 @@ import { db } from '@drift/db';
 
 import { env } from '../config/env.ts';
 import { logError, logEvent } from '../obs/logger.ts';
+import { publishContactStatusEvent } from '../modules/safety/contact-status-event.ts';
 import {
   CONSENT_RECONCILE_QUEUE,
   registerConsentReconcile,
@@ -83,12 +84,18 @@ export async function startWorker(): Promise<WorkerHandle> {
   // 启动顺序（worker 先起、HTTP 后起）本来就是这样。
   await registerContactAttemptTimeout(boss, {
     executor: db,
-    onExpired: (_attemptId, affected) => {
+    onExpired: (attemptId, affected) => {
       logEvent('contact_attempt.timeout_swept', {
         jobName: CONTACT_ATTEMPT_TIMEOUT_QUEUE,
         count: affected,
         contactAttemptStatus: affected > 0 ? 'failed' : 'pending',
       });
+      // 真的推进了（affected > 0）才广播：影响 0 行的重复投递不是状态变化。
+      // 超时置 failed 是用户看得到的转态 —— 没有这条事件，界面上的「正在联系」
+      // 会一直挂到刷新为止（Plan 08 Task 2 的接线点）。
+      if (affected > 0) {
+        void publishContactStatusEvent(db, attemptId);
+      }
     },
   });
 

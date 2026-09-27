@@ -208,7 +208,9 @@ export default [
   {
     // 负向 lint fixture：被上面的 ignores 排除出常规运行；元测试用 ignore:false
     // 显式 lint 它们。这里关掉 type-aware（fixture 不属于任何 tsconfig 的范围）。
-    files: ['tools/ci/fixtures/**/*.ts'],
+    // ⚠️ crisis-settimeout.tsx 单独列出：**/*.ts 不匹配 .tsx，而通用 TS 块的
+    // projectService 对不属于任何 tsconfig 的文件会直接 Parsing error。
+    files: ['tools/ci/fixtures/**/*.ts', 'tools/ci/fixtures/crisis-settimeout.tsx'],
     languageOptions: {
       parser: tsParser,
       parserOptions: { projectService: false, project: null },
@@ -244,6 +246,46 @@ export default [
       'no-restricted-syntax': ['error', ...REQUIRED_RESTRICTED_SYNTAX],
       'no-restricted-imports': restrictedImports(),
       ...TYPE_AWARE_ANY_DEFENSE,
+    },
+  },
+  {
+    // 危机 UI 目录的计时器禁令（SAFE-04 / UI-SPEC 明文：前端不得自行判定超时）。
+    //
+    // 计时权威在服务端：contact_attempt 的 10 分钟超时由 pg-boss 条件更新置 failed，
+    // 前端计时器会产生「界面说失败了但服务端还在 pending」的分叉，而这两个说法里
+    // 只有一个会被运营者看到 —— 与 COMPLY-03 的 2 小时提醒同一条原则。
+    //
+    // ⚠️ 必须 spread REQUIRED_RESTRICTED_SYNTAX：flat config 对同一规则的 options
+    // 是替换而非合并，不 spread 就会静默删掉 model 字面量与 GatedText 断言两组禁令。
+    //
+    // ⚠️ 本块同时覆盖负向 fixture（tools/ci/fixtures/crisis-settimeout.tsx）：fixture
+    // 目录在全局 ignores 里（常规 lint 跳过），由 tools/ci/crisis-ui-contract.test.ts
+    // 以 ignore:false 显式 lint 并断言禁令报错。本块必须位于 fixtures 块**之后**，
+    // 否则 fixtures 块的 no-restricted-syntax 会把这里的计时器禁令覆盖掉。
+    files: [
+      'apps/web/src/features/crisis/**/*.ts',
+      'apps/web/src/features/crisis/**/*.tsx',
+      'tools/ci/fixtures/crisis-settimeout.tsx',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...REQUIRED_RESTRICTED_SYNTAX,
+        {
+          // 两种 callee 形态都要覆盖：裸 setTimeout(...) 与 window.setTimeout(...)。
+          // 只写 callee.name 的话，成员形式会静默漏过 —— 那正是负向 fixture 证明的事。
+          selector:
+            "CallExpression[callee.name='setTimeout'], CallExpression[callee.property.name='setTimeout']",
+          message:
+            'crisis 目录禁止前端计时器：pending 的超时权威在服务端（pg-boss 条件更新）。界面自行判超时会产生「界面说失败了但服务端还在 pending」的分叉。',
+        },
+        {
+          selector:
+            "CallExpression[callee.name='setInterval'], CallExpression[callee.property.name='setInterval']",
+          message:
+            'crisis 目录禁止前端轮询计时：联络状态由 safety.contact_status 下行事件驱动，不由界面自己数秒。',
+        },
+      ],
     },
   },
 ];
