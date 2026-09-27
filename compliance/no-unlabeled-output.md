@@ -54,9 +54,29 @@ Plan 11 补齐，届时本条须连同 `egress_hash` 一起重新复核。
 `tools/ci/egress-registry.test.ts` 的第三条绑定断言守着：用一条含特征串的触发消息走到
 载荷构造点，断言序列化后的 webhook 载荷不含该特征串的任何片段。
 
+**Plan 07 补充的第三层：构造期自检。** `notifyOperator` 在 `fetch` 之前调用
+`assertNoUserText(payload, triggeringMessage)`，序列化后的载荷若命中触发消息的任何
+6 字以上子串即**抛错**（不是记一条警告）。理由与整条出口的理由相同：告警 JSON 不会
+有人去读，所以一条只被记录的警告等于没有。负向 fixture 在
+`tests/integration/crisis-order.test.ts`：把消息片段塞进一个 `note` 字段的载荷必须被
+抓到，且自检抛错时 `fetch` 一次都没有被调用过。
+
+⚠️ `notifyOperator` 因此多了第三个参数 `guard: { triggeringMessage }`。**它不改变本条
+的判据，也不改变 `carriesUserText: false`：** 受约束的对象是**载荷类型**，而
+`AcuteAlert` 里仍然不存在任何文本字段；`triggeringMessage` 只进入子串比较，从不被
+序列化、不落库、不进日志。`EGRESS_POINTS` 的集合（id / module / fn /
+carriesUserText）未发生任何变化，因此 `egress_hash` 不变 —— 这不是一次漏更新，而是
+「哈希守的是出口集合，不是函数签名」这条设计的正常表现。
+
 该出口同时是 D-09 引入的**一条新的个人信息流向**（向运营者披露「某用户触发了二级
 危机」这一事实）。它在隐私中心「我们收集了什么」中如实列明（PRIV-11），与本条的
 「不含对话内容」结论一致。
+
+⚠️ **给 Plan 10 的硬约束：** PRIV-11 的隐私中心披露文案必须与本出口**实际发出的字段**
+一一对应 —— 当前恰好是上面那五个，且不含任何对话内容。字段一旦增加，披露文案必须在
+**同一个 commit** 里同步；`ACUTE_ALERT_FIELDS` 与 `AcuteAlert` 的编译期字段集合断言
+保证「加了字段」不会无声无息，但它管不到披露文案 —— 那一层由本条约束与 Plan 10 的
+一致性检查负责。
 
 ### 5. `reconcile.publicnessWebhook` —— 公开性对账告警（`apps/api/src/worker/jobs/publicness-reconcile.ts`）
 

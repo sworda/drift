@@ -8,6 +8,7 @@
 // 强，因为它每个 PR 都跑，而改文件的破坏验证只在执行者手里跑过一次。
 
 import { eq } from 'drizzle-orm';
+import { PgBoss } from 'pg-boss';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 process.env['PORT'] = '3001';
@@ -18,8 +19,38 @@ process.env['LLM_PROVIDER_MODE'] = 'mock';
 process.env['LOG_LEVEL'] ??= 'warn';
 
 const { runTurn } = await import('../../apps/api/src/modules/chat/turn.ts');
-const { closeDb, db, llmCall, ownerSql, safetyEvent, sessionRiskState } = await import('@drift/db');
+const { AlertPayloadLeakError, assertNoUserText, buildWecomPayload, findLeakedSubstring, MIN_LEAK_LENGTH } =
+  await import('../../apps/api/src/modules/safety/alert.ts');
+const { registerContactAttemptTimeout, setContactAttemptTimeoutScheduler } = await import(
+  '../../apps/api/src/worker/jobs/contact-attempt-timeout.ts'
+);
+const {
+  closeDb,
+  contactAttempt,
+  db,
+  emergencyContact,
+  llmCall,
+  ownerDb,
+  ownerSql,
+  safetyEvent,
+  sessionRiskState,
+} = await import('@drift/db');
 const { seedConversation } = await import('./fixtures.ts');
+
+/**
+ * 触发消息里嵌一段长随机中文特征串。
+ *
+ * 随机而不是固定：固定串有可能恰好出现在告警模板里（那时断言会一直红，然后被人
+ * 改宽）。随机串保证「载荷里出现它」只有一个可能的来源 —— 它是从触发消息拷过去的。
+ */
+const TRACER_CHARS = '柰茜霖旻珩黛琰璟宸昀曦皓';
+function makeTracer(): string {
+  let out = '';
+  for (let i = 0; i < 10; i += 1) {
+    out += TRACER_CHARS[Math.floor(Math.random() * TRACER_CHARS.length)] ?? '柰';
+  }
+  return out;
+}
 
 /** RESEARCH §4.1 断言 1：safety.classify 不得早于 chat.reply。 */
 async function misorderedTurns(turnId?: string): Promise<number> {
@@ -55,8 +86,27 @@ async function sharedModelTurns(turnId?: string): Promise<number> {
 
 let seeded: Awaited<ReturnType<typeof seedConversation>>;
 let turnId: string;
+let boss: PgBoss;
+
+/** 第二次 turn：带紧急联系人与可拦截的 webhook，用来走到告警载荷构造点。 */
+let alertSeeded: Awaited<ReturnType<typeof seedConversation>>;
+let alertTracer: string;
+let alertTriggerText: string;
+let capturedBodies: string[] = [];
 
 beforeAll(async () => {
+  const connectionString = process.env['DATABASE_URL'];
+  if (connectionString === undefined) throw new Error('DATABASE_URL 未设置');
+  // 独立 schema：与其他集成测试文件的 boss 并发跑时不互相迁移同一套表。
+  boss = new PgBoss({
+    connectionString,
+    schema: 'pgboss_crisis_order',
+    application_name: 'crisis-order-test',
+  });
+  boss.on('error', () => undefined);
+  await boss.start();
+  await registerContactAttemptTimeout(boss, { executor: db });
+
   seeded = await seedConversation('crisis-order');
   // 明确的自残自杀意图 ⇒ 入站规则层建议 crisis，而 mock 分类器判 none。
   // resolveRisk 取较高者 ⇒ crisis（规则层只能抬升，不能降低）。
@@ -67,9 +117,42 @@ beforeAll(async () => {
   });
   turnId = result.turnId;
   expect(result.reply.outcome, '危机路径不应产出角色回复').toBe('escalated');
+
+  // ── 第二次 turn：走到 acute 告警的载荷构造点（Task 3）───────────────────────
+  alertSeeded = await seedConversation('crisis-alert');
+  await ownerDb.insert(emergencyContact).values({
+    userId: alertSeeded.userId,
+    kind: 'emergency',
+    name: '联系人甲',
+    contactRefEncrypted: 'enc:13812341234',
+  });
+  alertTracer = makeTracer();
+  alertTriggerText = `我真的不想活了，${alertTracer}，今天就想结束自己的生命。`;
+  capturedBodies = [];
+  const alertResult = await runTurn(
+    {
+      conversationId: alertSeeded.conversationId,
+      userId: alertSeeded.userId,
+      text: alertTriggerText,
+    },
+    {
+      alertFetch: (_input, init) => {
+        capturedBodies.push(typeof init?.body === 'string' ? init.body : String(init?.body ?? ''));
+        return Promise.resolve(
+          new Response(JSON.stringify({ errcode: 0, errmsg: 'ok' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      },
+    },
+  );
+  expect(alertResult.reply.outcome).toBe('escalated');
 });
 
 afterAll(async () => {
+  setContactAttemptTimeoutScheduler(null);
+  await boss.stop({ graceful: false, timeout: 5_000 });
   await closeDb();
 });
 
@@ -218,3 +301,81 @@ async function insertFakePair(
 async function deleteFakePair(fakeTurn: string): Promise<void> {
   await ownerSql`delete from llm_call where turn_id = ${fakeTurn}`;
 }
+
+describe('SAFE-16 / PRIV-11：运营者告警载荷不含任何对话文本', () => {
+  it('(1) 一次 crisis 流程里 notifyOperator 恰好被调用一次', async () => {
+    expect(capturedBodies, 'acute 告警应当恰好投递一次').toHaveLength(1);
+    // 且这次投递真的把 contact_attempt 推进到了 pending —— 否则「调用了一次」可能
+    // 只是一次失败的尝试，而本组断言的对象是**成功投递**的那条载荷。
+    const rows = await db
+      .select({ status: contactAttempt.status })
+      .from(contactAttempt)
+      .where(eq(contactAttempt.userId, alertSeeded.userId));
+    expect(rows[0]?.status).toBe('pending');
+  });
+
+  it('(2) 实际发出的 JSON 不含触发消息的任何 6 字以上子串', () => {
+    const body = capturedBodies[0] ?? '';
+    expect(body.length).toBeGreaterThan(0);
+    const leaked = findLeakedSubstring(body, alertTriggerText, MIN_LEAK_LENGTH);
+    expect(leaked, `告警载荷泄漏了对话片段：${leaked ?? ''}\n载荷：${body}`).toBeNull();
+    // 特征串单独再查一次（上面的窗口扫描已覆盖，这一行是给读失败信息的人看的）。
+    expect(body).not.toContain(alertTracer);
+  });
+
+  it('(3) 负向 fixture：把消息片段塞进 note 字段时 assertNoUserText 抛错', () => {
+    const alert = {
+      userId: alertSeeded.userId,
+      conversationId: alertSeeded.conversationId,
+      riskLevel: 'crisis',
+      occurredAt: new Date('2026-09-27T10:00:00.000Z'),
+      safetyEventId: 'sev_negative_fixture',
+    } as const;
+    const honest = buildWecomPayload(alert, ['@all']);
+    // 先证明自检对**干净**载荷不误报 —— 否则下面那条「抛错」可能只是恒抛。
+    expect(() => {
+      assertNoUserText(honest, alertTriggerText);
+    }).not.toThrow();
+
+    // 人为构造一个把触发消息片段塞进 note 字段的载荷（8 字，> MIN_LEAK_LENGTH）。
+    const fragment = alertTriggerText.slice(0, 8);
+    const leaky = { ...honest, note: `用户说：${fragment}` };
+    expect(() => {
+      assertNoUserText(leaky, alertTriggerText);
+    }).toThrow(AlertPayloadLeakError);
+    // 异常信息里不得原样带出那段泄漏文本（它会进日志/CI 输出）。
+    try {
+      assertNoUserText(leaky, alertTriggerText);
+    } catch (error) {
+      expect(error instanceof AlertPayloadLeakError).toBe(true);
+      expect(String(error)).not.toContain(fragment);
+    }
+  });
+
+  it('(4) 自检在 fetch **之前** —— 泄漏的载荷一次都发不出去', async () => {
+    const { notifyOperator } = await import('../../apps/api/src/modules/safety/alert.ts');
+    const sent: string[] = [];
+    const alert = {
+      userId: 'usr_guard',
+      // 把触发消息塞进一个本该是 id 的字段：这是「顺手多带一点方便排查」的真实形态。
+      conversationId: alertTriggerText,
+      riskLevel: 'crisis',
+      occurredAt: new Date('2026-09-27T10:00:00.000Z'),
+      safetyEventId: 'sev_guard',
+    } as const;
+    await expect(
+      notifyOperator(
+        alert,
+        {
+          webhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=guard',
+          fetchImpl: (_input, init) => {
+            sent.push(String(init?.body ?? ''));
+            return Promise.resolve(new Response('{"errcode":0}', { status: 200 }));
+          },
+        },
+        { triggeringMessage: alertTriggerText },
+      ),
+    ).rejects.toThrow(AlertPayloadLeakError);
+    expect(sent, '自检抛错之后 fetch 不应被调用过').toHaveLength(0);
+  });
+});

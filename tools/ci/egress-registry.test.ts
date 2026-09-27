@@ -29,6 +29,8 @@ import { EGRESS_POINTS, TEXT_CARRYING_EGRESS_POINTS, safetyGateway } from '@drif
 import {
   ACUTE_ALERT_FIELDS,
   ACUTE_ALERT_FIELDS_MATCH_TYPE,
+  MIN_LEAK_LENGTH,
+  findLeakedSubstring,
   notifyOperator,
   type AcuteAlert,
 } from '../../apps/api/src/modules/safety/alert.ts';
@@ -436,18 +438,10 @@ describe('绑定断言 3：acute 告警载荷不含对话文本（SAFE-16 / T-06
    * 接进了告警。
    */
   const TRACER = '霁蘅黟饕餮氤氲魍魎彧翾黼黻';
-  const MIN_LEAK_LENGTH = 6;
-
-  /** 返回第一段泄漏的子串（长度 >= minLength），没有泄漏则返回 null。 */
-  function findLeakedSubstring(serialized: string, secret: string, minLength: number): string | null {
-    for (let start = 0; start + minLength <= secret.length; start += 1) {
-      for (let end = secret.length; end - start >= minLength; end -= 1) {
-        const window = secret.slice(start, end);
-        if (serialized.includes(window)) return window;
-      }
-    }
-    return null;
-  }
+  // ⚠️ 子串检查器**只有一份实现**：Plan 07 把它挪进了
+  // apps/api/src/modules/safety/alert.ts（notifyOperator 的构造期自检要用它），
+  // 这里 import 那一份。测试里再复制一份的后果是两处分叉，而分叉之后这条断言守的
+  // 不再是生产代码实际使用的那个检查器。
 
   it('子串检查器自身有效 —— 一个故意泄漏的载荷必须被抓到（防止空真通过）', () => {
     const leaky = JSON.stringify({ msgtype: 'text', text: { content: `触发消息：${TRACER}` } });
@@ -494,11 +488,17 @@ describe('绑定断言 3：acute 告警载荷不含对话文本（SAFE-16 / T-06
         }),
       );
     };
-    const result = await notifyOperator(alert, {
-      webhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test',
-      mentionedList: ['@all'],
-      fetchImpl,
-    });
+    const result = await notifyOperator(
+      alert,
+      {
+        webhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test',
+        mentionedList: ['@all'],
+        fetchImpl,
+      },
+      // Plan 07：第三个参数是构造期自检的针。传真正的触发消息 —— 传空串会让自检
+      // 静默跳过，于是这条断言只剩「事后检查序列化结果」一层。
+      { triggeringMessage: candidateText },
+    );
     expect(result.delivered).toBe(true);
 
     // ④ 断言：整段载荷里没有触发消息的任何 6 字以上片段。
@@ -549,19 +549,26 @@ describe('绑定断言 3：acute 告警载荷不含对话文本（SAFE-16 / T-06
       safetyEventId: 'sev_x',
     };
     const transport = { webhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=x' };
+    // 本条用例的被测对象是投递结果的判定，不是构造期自检 —— 一条与告警字段无关的
+    // 触发消息让自检必然通过（下面那一组断言才是自检本身的被测点）。
+    const guard = { triggeringMessage: '这一句与告警载荷没有任何共同片段。' } as const;
 
     // 企业微信对无效 webhook 同样返回 200 —— 业务码非 0 必须算失败，否则状态机会把
     // 一次没送到的告警置成 pending，然后等一个永远不会来的运营者确认。
-    const businessError = await notifyOperator(alert, {
-      ...transport,
-      fetchImpl: () =>
-        Promise.resolve(
-          new Response(JSON.stringify({ errcode: 93_000, errmsg: 'invalid webhook url' }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          }),
-        ),
-    });
+    const businessError = await notifyOperator(
+      alert,
+      {
+        ...transport,
+        fetchImpl: () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ errcode: 93_000, errmsg: 'invalid webhook url' }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }),
+          ),
+      },
+      guard,
+    );
     expect(businessError).toEqual({
       delivered: false,
       reason: 'business_error',
@@ -569,16 +576,18 @@ describe('绑定断言 3：acute 告警载荷不含对话文本（SAFE-16 / T-06
       errcode: 93_000,
     });
 
-    const httpError = await notifyOperator(alert, {
-      ...transport,
-      fetchImpl: () => Promise.resolve(new Response('nope', { status: 500 })),
-    });
+    const httpError = await notifyOperator(
+      alert,
+      { ...transport, fetchImpl: () => Promise.resolve(new Response('nope', { status: 500 })) },
+      guard,
+    );
     expect(httpError.delivered).toBe(false);
 
-    const networkError = await notifyOperator(alert, {
-      ...transport,
-      fetchImpl: () => Promise.reject(new Error('ECONNRESET')),
-    });
+    const networkError = await notifyOperator(
+      alert,
+      { ...transport, fetchImpl: () => Promise.reject(new Error('ECONNRESET')) },
+      guard,
+    );
     expect(networkError).toEqual({
       delivered: false,
       reason: 'network_error',

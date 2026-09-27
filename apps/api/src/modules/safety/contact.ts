@@ -73,6 +73,15 @@ export interface ContactAttemptInput {
   readonly userId: string;
   readonly conversationId: string;
   readonly occurredAt?: Date;
+  /**
+   * 触发本次联络的用户消息。
+   *
+   * ⚠️ 它**只**被传给 notifyOperator 的构造期自检当作子串检查的针，
+   * **不进任何载荷、不落任何库、不进日志**。这个参数存在的理由是：那条自检需要
+   * 一根针，而针只能从触发点传下来。看到它在这里不要顺手把它拼进告警正文 ——
+   * 那正是它被用来检测的那件事（T-07-04）。
+   */
+  readonly triggeringMessage: string;
 }
 
 interface InsertArgs {
@@ -167,7 +176,9 @@ export async function startContactAttempt(
     occurredAt: input.occurredAt ?? new Date(),
     safetyEventId: input.safetyEventId,
   };
-  const delivery = await notifyOperator(alert, deps.transport);
+  const delivery = await notifyOperator(alert, deps.transport, {
+    triggeringMessage: input.triggeringMessage,
+  });
 
   // (5) 投递失败 ⇒ 直接 unavailable，**不经 pending**（SAFE-16 明文）。
   if (!delivery.delivered) {

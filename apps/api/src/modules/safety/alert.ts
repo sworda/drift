@@ -9,6 +9,15 @@
 //     断言。tools/ci/egress-registry.test.ts 的第三条绑定断言再补一层运行时证明：
 //     用一条含特征串的触发消息走到载荷构造点，断言序列化后的 webhook 载荷不含该
 //     特征串的任何片段。
+//
+//     **Plan 07 又补了第三层：构造期自检。** notifyOperator 在 fetch 之前调用
+//     `assertNoUserText(payload, triggeringMessage)`，命中即**抛错**（不是记一条
+//     警告）。为什么抛错而不是告警：一条只被记录的警告需要有人去读那段 JSON，而
+//     这条出口存在的全部理由就是「没有人会去读它」。抛错让泄漏在运行时立刻失败。
+//     为什么它还需要 triggeringMessage 这个参数：子串检查需要针（needle）。这个
+//     参数**从不被序列化**，它只进入比较 —— 所以 EGRESS_POINTS 里
+//     `carriesUserText: false` 仍然成立：受约束的是**载荷类型**，而载荷类型里没有
+//     任何文本字段。
 //  2. **投递结果如实返回，不吞。** SAFE-16：2xx 且业务码成功 ⇒ 调用方进 pending；
 //     **投递失败直接进 unavailable、不经 pending**。所以这里绝不能把失败包成成功，
 //     也不能只 log 不返回 —— 状态机（Plan 07）要靠这个返回值分辨那两条路。
@@ -90,6 +99,73 @@ export type AlertDeliveryResult =
 export const ALERT_TIMEOUT_MS = 10_000;
 
 /**
+ * 判定「载荷泄漏了触发消息」的最短子串长度。
+ *
+ * 6 个字符：中文下六个字已经足以复原一句话的语义片段，而更短的窗口（两三个字）会
+ * 把「今天」「我们」这类必然共现的常用词判成泄漏 —— 一条恒红的断言会被人关掉，
+ * 那比没有断言更糟。与 tools/ci/egress-registry.test.ts 的 MIN_LEAK_LENGTH 同值，
+ * 两处由 Task 3 的 crisis-order 断言共同覆盖。
+ */
+export const MIN_LEAK_LENGTH = 6;
+
+export class AlertPayloadLeakError extends Error {
+  constructor(
+    /** 泄漏的子串。**只进异常对象，不进日志** —— 它就是用户原文的一个片段。 */
+    readonly leaked: string,
+  ) {
+    super(
+      `acute 告警载荷里出现了触发消息的片段（${String(leaked.length)} 字）。告警不得携带任何对话内容（SAFE-16 / PRIV-11）。`,
+    );
+    this.name = 'AlertPayloadLeakError';
+  }
+}
+
+/**
+ * 返回载荷里第一段长度 >= minLength 的泄漏子串；没有泄漏则 null。**纯函数。**
+ *
+ * 穷举触发消息的所有长度 >= minLength 的子串，逐个在序列化载荷里找。对一条几百字的
+ * 消息是 O(n²) 次 includes —— 在一次 webhook 投递的时间尺度上完全不值得优化，而
+ * 「快一点但漏一种形态」在这条出口上是错的取舍。
+ */
+export function findLeakedSubstring(
+  serialized: string,
+  triggeringMessage: string,
+  minLength: number = MIN_LEAK_LENGTH,
+): string | null {
+  for (let start = 0; start + minLength <= triggeringMessage.length; start += 1) {
+    for (let end = triggeringMessage.length; end - start >= minLength; end -= 1) {
+      const window = triggeringMessage.slice(start, end);
+      if (serialized.includes(window)) return window;
+    }
+  }
+  return null;
+}
+
+/**
+ * 构造期自检：载荷不得含触发消息的任何 >= 6 字子串。**命中即抛错。**
+ *
+ * @param payload 即将被序列化发出的载荷对象。
+ * @param triggeringMessage 触发本次告警的用户消息。**只作为比较用的针，不会被发出。**
+ * @throws AlertPayloadLeakError
+ */
+export function assertNoUserText(payload: unknown, triggeringMessage: string): void {
+  if (triggeringMessage.length < MIN_LEAK_LENGTH) return;
+  const leaked = findLeakedSubstring(JSON.stringify(payload), triggeringMessage);
+  if (leaked !== null) throw new AlertPayloadLeakError(leaked);
+}
+
+/**
+ * 告警的留证上下文。
+ *
+ * 独立成一个参数而不是塞进 AlertTransport：transport 是「发到哪里、怎么发」，
+ * 而这里是「拿什么当针」。两者混在一起会让人以为 triggeringMessage 会被发出去。
+ */
+export interface AlertGuard {
+  /** 触发本次告警的用户消息。**只进 assertNoUserText 的比较，不进载荷。** */
+  readonly triggeringMessage: string;
+}
+
+/**
  * 渲染告警正文。
  *
  * ⚠️ 只能引用 AcuteAlert 的五个字段。不要为了「让运营者看得懂」而拼一句用户原话 ——
@@ -130,19 +206,27 @@ function readErrcode(body: unknown): number | null {
 /**
  * 投递一条 acute 告警。**第四个出站出口。**
  *
+ * @param guard 触发消息（只作为子串检查的针）。省略等于放弃构造期自检 —— 因此它
+ *   **不是可选的**：一个可选的自检等于把「这次有没有泄漏」变成调用方的选择题，而
+ *   本文件存在的理由就是那道题不该存在。
  * @returns 投递结果。业务码非 0 视为失败（企业微信对无效 webhook 同样返回 200）。
+ * @throws AlertPayloadLeakError 载荷含触发消息的 >= 6 字子串时。
  */
 export async function notifyOperator(
   alert: AcuteAlert,
   transport: AlertTransport,
+  guard: AlertGuard,
 ): Promise<AlertDeliveryResult> {
   const send = transport.fetchImpl ?? fetch;
+  const payload = buildWecomPayload(alert, transport.mentionedList ?? []);
+  // ⚠️ 自检在 fetch **之前**。放在之后就只是一次事后记录 —— 而那时载荷已经出境了。
+  assertNoUserText(payload, guard.triggeringMessage);
   let response: Response;
   try {
     response = await send(transport.webhookUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(buildWecomPayload(alert, transport.mentionedList ?? [])),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(ALERT_TIMEOUT_MS),
     });
   } catch {

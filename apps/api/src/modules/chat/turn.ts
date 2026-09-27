@@ -294,6 +294,8 @@ export async function runTurn(
       contactChannel: contactChannel({
         userId: input.userId,
         conversationId: prepared.conversation.id,
+        // 只作为告警载荷自检的针（见 alert.ts 的 assertNoUserText）。不进载荷。
+        triggeringMessage: input.text,
         alertFetch: overrides?.alertFetch,
       }),
       recordSafetyEvent: async (draft) =>
@@ -424,13 +426,19 @@ export async function runTurn(
 function contactChannel(ctx: {
   readonly userId: string;
   readonly conversationId: string;
+  readonly triggeringMessage: string;
   readonly alertFetch?: typeof fetch | undefined;
 }): ContactChannel {
   return async (safetyEventId) => {
     try {
       const result = await startContactAttempt(
         db,
-        { safetyEventId, userId: ctx.userId, conversationId: ctx.conversationId },
+        {
+          safetyEventId,
+          userId: ctx.userId,
+          conversationId: ctx.conversationId,
+          triggeringMessage: ctx.triggeringMessage,
+        },
         {
           transport: {
             webhookUrl: env.WECOM_WEBHOOK_URL,
