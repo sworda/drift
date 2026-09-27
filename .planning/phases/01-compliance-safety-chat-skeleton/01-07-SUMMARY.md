@@ -397,6 +397,70 @@ OPERATOR_API_TOKEN=$(openssl rand -hex 32)
 - **运营者端点只有共享密钥 + 仅内网绑定，没有账号体系、没有审计日志、没有限流。** Phase 1 的规模（≤10 用户、运营者是项目作者本人）下这是可接受的；公开上线前需要升级。
 - **一级/二级卡片的文案未经任何人工走查。** 文案常量写在 `care-cards.ts` 里，与 UI-SPEC 的〔法定〕必含内容逐条对照过，但「读起来像不像平台的关怀」是人眼判断（coverage 的 D9）。
 
+## Self-Check: PASSED
+
+| 检查 | 命令 | 结果 |
+|---|---|---|
+| 计划级验证 1 | `pnpm run ci:fast` | 退出 0，175 passed（11 个 contract 文件 + 79 unit） |
+| 计划级验证 2 | `vitest run tests/integration/crisis-order.test.ts` | 14 passed（两条 SQL 各 0 行 + 两条注入式非空真 + 告警载荷 4 条） |
+| 计划级验证 3 | `vitest run tests/integration/contact-attempt.test.ts` | 21 passed（六条分支 + 四态逐个覆盖 + 三条 DB CHECK 负向 + 运营者端点 3 条） |
+| 计划级验证 4 | `vitest run tests/integration/fail-closed.test.ts` | 17 passed（三类失败 × 五条断言 + 两条非空真对照） |
+| 计划级验证 5 | `vitest run tools/ci/pgboss-delay-api.test.ts` | 5 passed（600±5s 窗口 + 60s 负向 fixture + 队列策略 + 去重） |
+| 集成层整体 | `pnpm run test:integration` | 6 个文件 85 passed |
+| 漂移门禁 | `pnpm --filter @drift/db run db:check` | 无漂移，pgboss schema 正确排除 |
+| 留证单点 | `grep -rn 'insert(safetyEvent' packages apps --include=*.ts` | 恰好 1 行（state.ts:194） |
+| turn.ts 无降级 catch | `grep -rn 'catch' apps/api/src/modules/chat/turn.ts` | 仅 5 处注释 + 联络通道工厂内 1 处（作用域内无 deliver / insertCharacterMessage） |
+| unconfirmed 未映射 unavailable | `grep -rn 'unconfirmed' apps/api/src/modules/safety/contact.ts` | 仅 2 行注释（明写「unconfirmed 本身**不**导致 unavailable」），无代码路径 |
+| 运营者端点不读会话 | `grep -n 'message' apps/api/src/modules/safety/routes.ts` | 仅注释与 zod `issue.message`，无 message 表查询 |
+| ackDelivered 不用回执作判据 | `grep -n 'notifyOperator' apps/api/src/modules/safety/contact.ts` | 3 处：import、startContactAttempt 内、以及一条注释；ackDelivered 内 0 处 |
+| artifacts min_lines | `wc -l` | timeout 作业 158（>=20）、crisis-order 381（>=40）、contact-attempt 475（>=60）、fail-closed 198（>=50）、pgboss-delay 139（>=20） |
+| 提交原子性 | `git log --oneline --all --grep=01-07` | 7 个 commit（3 个任务各 1 + 1 chore + 1 test 收尾 + 2 docs） |
+
+**未覆盖项（已记入 coverage 的 human_judgment）：** 关怀卡片的真实版式（D9，Plan 08 渲染）、入站规则层的真实召回率（D10，Plan 08 探针集）、企业微信 webhook 的真实投递（D11，需一次人工验证）。
+
+## pg-boss .d.ts 签名原文抄录（Task 2 验收要求）
+
+来自 `node_modules/pg-boss/dist/index.d.ts` 与 `types.d.ts`，逐字抄录：
+
+```ts
+send(name: string, data?: object | null, options?: types.SendOptions): Promise<string | null>;
+sendAfter(name: string, data: object | null, options: types.SendOptions | null, date: Date): Promise<string | null>;
+sendAfter(name: string, data: object | null, options: types.SendOptions | null, dateString: string): Promise<string | null>;
+sendAfter(name: string, data: object | null, options: types.SendOptions | null, seconds: number): Promise<string | null>;
+findJobs<T>(name: string, options?: types.FindJobsOptions): Promise<types.JobWithMetadata<T>[]>;
+createQueue(name: string, options?: Omit<types.Queue, 'name'>): Promise<void>;
+/** @deprecated Use findJobs() instead */
+getJobById<T>(name: string, id: string, options?: types.ConnectionOptions): Promise<types.JobWithMetadata<T> | null>;
+
+export interface JobOptions {
+    id?: string;
+    priority?: number;
+    startAfter?: number | string | Date;
+    singletonKey?: string;
+    singletonSeconds?: number;
+    singletonNextSlot?: boolean;
+    group?: GroupOptions;
+    deadLetter?: string;
+}
+
+export interface FindJobsOptions extends ConnectionOptions {
+    id?: string;
+    key?: string;
+    data?: object;
+    queued?: boolean;
+}
+
+// JobWithMetadata 的相关字段
+startAfter: Date;
+singletonKey: string | null;
+
+// QueuePolicy 的 doc 原文（本 plan 选用 'short' 的依据）
+// - `short` only allows 1 job to be queued, unlimited active. Can be extended
+//   with `singletonKey`.
+```
+
+本 plan 用的是 `send(name, data, { startAfter: 600, singletonKey })` 这一形态（单参数形态比 `sendAfter` 的四参数形态少一个「忘了传 null」的失手位置），读回用 `findJobs`（`getJobById` 已 `@deprecated`）。
+
 ---
 *Phase: 01-compliance-safety-chat-skeleton*
 *Completed: 2026-09-27*
