@@ -12,6 +12,8 @@ import { Server as HttpServer } from 'node:http';
 
 import { serve } from '@hono/node-server';
 
+import { assertRouterInvariants } from '@drift/llm';
+
 import { env } from './config/env.ts';
 import { closeDb } from './db/client.ts';
 import { createApp } from './http/app.ts';
@@ -21,6 +23,14 @@ import { attachWebSocket, WS_PATH } from './ws/server.ts';
 import { startWorker } from './worker/index.ts';
 
 async function main(): Promise<void> {
+  // 0) **启动的第一步**：Model Router 的三条不变量（SAFE-02 模型分离 / alias-only
+  //    禁降级 / baseURL host 白名单）。抛错即 exit 1，在连库、监听、boss.start 之前。
+  //
+  //    为什么必须在最前面：这三条都是配置错误，而配置错误一旦让进程起来了，
+  //    表现形式就是「一切正常，只是安全判定其实由扮演角色自己做」或「真实对话
+  //    正在出境」—— 两者都不会有任何征兆，且第二条不可逆。
+  assertRouterInvariants();
+
   logEvent('startup.begin', { phase: 'worker', route: WS_PATH });
 
   // 1) worker 先起：boss.start() 会建好 pgboss schema，而 /healthz 的 pgboss 字段查它。

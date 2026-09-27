@@ -4,100 +4,37 @@
 // 导入者，静态与动态 import 都只允许在这里（eslint.config.js 的 no-restricted-imports
 // + ImportExpression 选择器）。
 //
-// call() 做四件事，缺一不可：
+// call() 做五件事，缺一不可：
 //   1. 解析 route（或校验 pinned 的可 pin 性）
 //   2. 执行 provider 调用
-//   3. **在调用方给的同一个 executor 上**写一行 llm_call（turn_id + purpose 非空）
-//   4. 把 requested / snapshot / resolved 三者分开落库
+//   3. 在调用方给的 executor 上写一行 llm_call（turn_id + purpose 非空）
+//   4. 把 requested / snapshot / resolved 三者**分三列**落库
+//   5. resolved ≠ requested 时发一条 warn 事件（别名被解析，是应告警事件）
 //
 // 第 3 条是 RESEARCH §4.1 两条 SQL 断言（判定顺序、SAFE-02 模型分离）的数据前提。
+//
+// ⚠️ 本模块在加载时就跑一次 assertRouterInvariants()。apps/api 的启动第一步还会
+// 显式再跑一次 —— 重复是故意的：显式调用是给读代码的人看的（启动顺序摆在眼前），
+// 模块级调用是给「将来某个新入口忘了调」兜底的。
 
 import { inputHash } from '@drift/prompts';
 
 import { llmCall, type Executor, type LlmPurpose } from '@drift/db';
 
-import { mockProvider } from './providers/mock.ts';
+import { aliasResolvedEvent, emitLlmEvent } from './events.ts';
+import { pinnabilityOf } from './pinnability.ts';
+import { resolveProvider } from './providers/index.ts';
+import { boundariesForModel, priceTierFor, ROUTES } from './routes.ts';
+import { assertRouterInvariants } from './startup-assertions.ts';
 import {
   MODELS,
-  PINNABLE,
   type CallMode,
-  type Provider,
-  type Route,
-  type RoutedRole,
+  type FrontierMessages,
+  type ProviderName,
   type SemanticRole,
 } from './types.ts';
 
-/**
- * 语义角色 → 模型的路由表（PLAT-05）。
- *
- * ⚠️ `safety.classify` 必须与 `chat.reply` / `chat.reply.frontier` 用**不同**的模型
- * （SAFE-02），且建议不同厂商 —— 一次厂商侧故障不应同时打掉角色层与安全层。
- * 下面的 assertRoutes() 在模块加载时就检查这件事：进程起不来比半年后发现好。
- */
-export const ROUTES: Readonly<Record<RoutedRole, Route>> = Object.freeze({
-  'chat.reply': {
-    modelSnapshot: 'doubao-seed-character-251128',
-    temperature: 0.8,
-    thinkingMode: 'off',
-  },
-  'chat.reply.frontier': {
-    modelSnapshot: 'claude-sonnet-5',
-    temperature: 0.8,
-    thinkingMode: 'auto',
-  },
-  'persona.reflect': {
-    modelSnapshot: 'qwen3.8-max-0902',
-    temperature: 0.3,
-    thinkingMode: 'auto',
-  },
-  'memory.extract': {
-    modelSnapshot: 'glm-4.7-flash',
-    temperature: 0,
-    thinkingMode: 'off',
-  },
-  'safety.classify': {
-    modelSnapshot: 'glm-4.7-flash',
-    temperature: 0,
-    thinkingMode: 'off',
-  },
-});
-
-/** 启动期断言。任一条不成立即抛 —— 不降级、不静默。 */
-export function assertRoutes(): void {
-  const reply = ROUTES['chat.reply'].modelSnapshot;
-  const frontier = ROUTES['chat.reply.frontier'].modelSnapshot;
-  const classify = ROUTES['safety.classify'].modelSnapshot;
-  if (classify === reply || classify === frontier) {
-    throw new Error(
-      `SAFE-02 违反：safety.classify 与扮演角色用了同一个模型（${classify}）。危机判定必须由与扮演角色不同的模型执行。`,
-    );
-  }
-  for (const [role, route] of Object.entries(ROUTES)) {
-    if (PINNABLE[route.modelSnapshot] !== 'snapshot') {
-      throw new Error(
-        `路由表里的 ${role} 指向 ${route.modelSnapshot}，它在 PINNABLE 里不是 snapshot —— 别名会在某天被重新解析到另一组权重上。`,
-      );
-    }
-  }
-}
-
-assertRoutes();
-
-/**
- * provider 解析。
- *
- * `LLM_PROVIDER_MODE=mock`（默认）时全部走 mock —— 但**仍然经这一个 call()**，
- * 所以 llm_call 照样落库、可 pin 性照样被检查。live 模式的真实 provider 实例在
- * Plan 05 接入；此刻显式抛错而不是悄悄回落到 mock：回落会让「以为在跑真模型」
- * 这件事没有任何征兆。
- */
-function resolveProvider(): Provider {
-  const mode = process.env['LLM_PROVIDER_MODE'] ?? 'mock';
-  if (mode === 'mock') return mockProvider;
-  throw new Error(
-    `LLM_PROVIDER_MODE=${mode} 尚未接入真实 provider（Plan 05）。不回落到 mock —— 回落会让「以为在跑真模型」没有任何征兆。`,
-  );
-}
+assertRouterInvariants();
 
 export interface CallRequest {
   /** 同一次用户消息引发的全部调用共享一个 turnId。两条架构断言按它 JOIN。 */
@@ -113,56 +50,84 @@ export interface CallResult {
   readonly text: string;
   readonly purpose: LlmPurpose;
   readonly provider: string;
+  readonly requestedModel: string;
   readonly modelSnapshot: string;
   readonly resolvedModel: string;
+  /** provider 回传的模型与我们要求的不一致 ⇒ 别名被解析。落库 + 一条 warn 事件。 */
+  readonly aliasResolved: boolean;
+  readonly priceTier: string;
   readonly latencyMs: number;
 }
 
-function resolveMode(mode: CallMode): {
+interface ResolvedCall {
   readonly purpose: SemanticRole;
+  readonly providerName: ProviderName;
   readonly modelSnapshot: string;
   readonly requestedModel: string;
   readonly temperature: number;
+  readonly maxOutputTokens: number;
   readonly thinkingMode: string;
-} {
-  if (mode.mode === 'routed') {
-    const route = ROUTES[mode.role];
-    return {
-      purpose: mode.role,
-      modelSnapshot: route.modelSnapshot,
-      requestedModel: route.modelSnapshot,
-      temperature: route.temperature,
-      thinkingMode: route.thinkingMode,
-    };
-  }
-  // pinned：探针与对照组。别名在这里必须**抛错**而不是降级。
-  if (PINNABLE[mode.modelSnapshot] !== 'snapshot') {
+  readonly priceTierBoundaries: readonly number[];
+}
+
+function resolveRoutedCall(role: SemanticRole): ResolvedCall {
+  const route = ROUTES[role];
+  if (!route.enabled) {
     throw new Error(
-      `pinned 模式拒绝 ${mode.modelSnapshot}：它是 alias-only。降级换模型等于尺子在测量过程中被换掉。`,
+      `语义角色 ${role} 在 Phase 1 未启用（routes.ts 的 enabled=false）。不静默换一个启用的角色 —— 换角色等于换模型、换温度、换计价档位。`,
     );
   }
   return {
-    purpose: 'persona.probe',
-    modelSnapshot: mode.modelSnapshot,
-    requestedModel: mode.modelSnapshot,
-    temperature: 0,
-    thinkingMode: 'off',
+    purpose: role,
+    providerName: route.provider,
+    modelSnapshot: route.modelSnapshot,
+    requestedModel: route.requestedModel,
+    temperature: route.temperature,
+    maxOutputTokens: route.maxOutputTokens,
+    thinkingMode: route.thinkingMode,
+    priceTierBoundaries: route.priceTierBoundaries,
   };
 }
 
-/**
- * 唯一入口。
- *
- * `executor` 由调用方传入（通常是当前 turn 的事务）—— llm_call 与业务写入落在同一个
- * 事务里，于是「有回复但没有调用记录」这种状态在结构上不可能出现。
- */
-export async function call(
-  mode: CallMode,
+function resolveMode(mode: CallMode): ResolvedCall {
+  if (mode.mode === 'routed') return resolveRoutedCall(mode.role);
+
+  // pinned：探针与对照组。别名在这里必须**抛错**而不是降级。
+  const pinnability = pinnabilityOf(mode.modelSnapshot);
+  if (pinnability === undefined) {
+    throw new Error(
+      `pinned 模式拒绝 ${mode.modelSnapshot}：它没有登记可 pin 性。未登记不得默认成 snapshot。`,
+    );
+  }
+  if (pinnability !== 'snapshot') {
+    throw new Error(
+      `pinned 模式拒绝 ${mode.modelSnapshot}：它是 ${pinnability}。降级换模型等于尺子在测量过程中被换掉。`,
+    );
+  }
+  const probeRoute = ROUTES['persona.probe'];
+  const providerName = declaredProviderOf(mode.modelSnapshot);
+  if (providerName === undefined) {
+    throw new Error(`${mode.modelSnapshot} 没有登记 provider 归属。`);
+  }
+  return {
+    purpose: 'persona.probe',
+    providerName,
+    modelSnapshot: mode.modelSnapshot,
+    requestedModel: mode.modelSnapshot,
+    // 探针把可控变量全部锁死（RESEARCH：只有这样剩下的方差才只来自模型侧）。
+    temperature: 0,
+    maxOutputTokens: probeRoute.maxOutputTokens,
+    thinkingMode: 'off',
+    priceTierBoundaries: boundariesForModel(mode.modelSnapshot),
+  };
+}
+
+async function dispatch(
+  resolved: ResolvedCall,
   request: CallRequest,
   executor: Executor,
 ): Promise<CallResult> {
-  const resolved = resolveMode(mode);
-  const provider = resolveProvider();
+  const provider = resolveProvider(resolved.providerName);
 
   const startedAt = Date.now();
   const response = await provider.generate({
@@ -170,8 +135,22 @@ export async function call(
     prompt: request.prompt,
     modelSnapshot: resolved.modelSnapshot,
     temperature: resolved.temperature,
+    maxOutputTokens: resolved.maxOutputTokens,
   });
   const latencyMs = Date.now() - startedAt;
+
+  // 计价档位由**边界 + 实际 prompt_tokens** 推出，而不是由 provider 回传：
+  // 分段计费的边界是合同事实，provider 的回包里没有它。
+  const priceTier = priceTierFor(resolved.priceTierBoundaries, response.promptTokens);
+
+  // 「别名被解析」是一条应告警事件，不是一个可以只落库的字段：落库的行要等到有人
+  // 去查才被看见，而厂商静默换模型这件事需要在**当天**被看见（V.2 的采样论证）。
+  const aliasEvent = aliasResolvedEvent({
+    purpose: resolved.purpose,
+    requestedModel: resolved.requestedModel,
+    resolvedModel: response.resolvedModel,
+  });
+  if (aliasEvent !== null) emitLlmEvent(aliasEvent);
 
   await executor.insert(llmCall).values({
     turnId: request.turnId,
@@ -192,7 +171,7 @@ export async function call(
     promptTokens: response.promptTokens,
     completionTokens: response.completionTokens,
     cachedTokens: response.cachedTokens,
-    priceTier: response.priceTier,
+    priceTier,
     latencyMs,
     userId: request.userId,
     conversationId: request.conversationId,
@@ -204,13 +183,55 @@ export async function call(
     text: response.text,
     purpose: resolved.purpose,
     provider: provider.id,
+    requestedModel: resolved.requestedModel,
     modelSnapshot: resolved.modelSnapshot,
     resolvedModel: response.resolvedModel,
+    aliasResolved: aliasEvent !== null,
+    priceTier,
     latencyMs,
   };
 }
 
+/**
+ * 唯一入口（境内通道）。
+ *
+ * `executor` 由调用方传入 —— llm_call 与业务写入用同一个执行器，于是
+ * 「有回复但没有调用记录」这种状态不会因为忘了传而出现。
+ *
+ * ⚠️ `CallMode` 的 role 在类型层排除了 `persona.probe`（只能 pinned）与
+ * `chat.reply.frontier`（只能经 callFrontier，且只接受 SyntheticText）。
+ */
+export async function call(
+  mode: CallMode,
+  request: CallRequest,
+  executor: Executor,
+): Promise<CallResult> {
+  return dispatch(resolveMode(mode), request, executor);
+}
+
+/**
+ * 境外通道的唯一入口（PLAT-07）。
+ *
+ * 参数类型是 `FrontierMessages` = `readonly SyntheticText[]`：真实用户原文在**编译期**
+ * 就传不进来。这条防线必须是编译期的 —— PITFALLS 把「用户原文误发境外 provider」
+ * 列为 HIGH 且**不可逆**（发出即已出境），运行时判断与代码评审都来不及。
+ *
+ * Phase 1 不启用该通道（routes.ts 的 enabled=false），所以调用它会抛错；
+ * 但签名现在就定下来，因为签名是最便宜的 CI 级防线。
+ */
+export async function callFrontier(
+  messages: FrontierMessages,
+  request: Omit<CallRequest, 'prompt'>,
+  executor: Executor,
+): Promise<CallResult> {
+  if (messages.length === 0) {
+    throw new Error('callFrontier 的 messages 为空 —— 境外通道不接受空载荷。');
+  }
+  const resolved = resolveRoutedCall('chat.reply.frontier');
+  return dispatch(resolved, { ...request, prompt: messages.join('\n\n') }, executor);
+}
+
 /** 供启动自检与测试读取：某个 snapshot 声明归属哪个厂商。 */
-export function declaredProviderOf(modelSnapshot: string): string | undefined {
+export function declaredProviderOf(modelSnapshot: string): ProviderName | undefined {
   return MODELS[modelSnapshot as keyof typeof MODELS]?.provider;
 }

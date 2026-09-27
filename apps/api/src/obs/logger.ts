@@ -16,6 +16,8 @@
 
 import { pino } from 'pino';
 
+import { setLlmEventSink } from '@drift/llm';
+
 import { env, type LogLevel } from '../config/env.ts';
 
 /**
@@ -42,6 +44,11 @@ export const LOG_ALLOWED_FIELDS = [
   'provider',
   'model',
   'modelSnapshot',
+  // 三者都是模型标识 / 语义角色枚举，不可反推自然人。
+  // requestedModel 与 resolvedModel 成对出现才有意义：不一致即「别名被解析」。
+  'purpose',
+  'requestedModel',
+  'resolvedModel',
   'promptVersion',
   'tokensIn',
   'tokensOut',
@@ -145,3 +152,17 @@ export function logError(event: string, error: unknown, fields: LogFields = {}):
   const errorName = error instanceof Error ? error.name : typeof error;
   emit('error', { event, errorName, ...fields });
 }
+
+/**
+ * packages/llm 的告警 sink 注册。
+ *
+ * ⚠️ 为什么注册在这里而不是 index.ts：logger 是 apps/api 里唯一被**所有**入口加载
+ * 的模块（HTTP / WS / worker / 集成测试直接 import app.ts）。注册在 index.ts 只覆盖
+ * 生产进程，集成测试里 `llm.model_alias_resolved` 会被静默丢掉 —— 一条在测试环境
+ * 里不存在的告警，与一条不存在的告警没有区别。
+ *
+ * fields 的三个键都在 LOG_ALLOWED_FIELDS 里，所以这条事件同样受白名单约束。
+ */
+setLlmEventSink((llmEvent) => {
+  logEvent(llmEvent.event, llmEvent.fields, llmEvent.level);
+});

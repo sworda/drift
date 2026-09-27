@@ -51,7 +51,6 @@ export const mockProvider: Provider = {
       promptTokens: Math.ceil(request.prompt.length / 4),
       completionTokens: Math.ceil(text.length / 4),
       cachedTokens: 0,
-      priceTier: 'mock',
     };
   },
 };

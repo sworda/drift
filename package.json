@@ -22,6 +22,8 @@
   "devDependencies": {
     "@drift/contract": "workspace:*",
     "@drift/db": "workspace:*",
+    "@drift/llm": "workspace:*",
+    "@drift/prompts": "workspace:*",
     "@drift/safety": "workspace:*",
     "@hono/node-server": "2.1.1",
     "@types/node": "24.19.0",

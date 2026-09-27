@@ -3,5 +3,10 @@
 // 静态 import 与动态 import() 都只允许出现在这里。
 
 export * from './types.ts';
+export * from './pinnability.ts';
+export * from './hosts.ts';
+export * from './routes.ts';
+export * from './events.ts';
+export * from './startup-assertions.ts';
 export * from './router.ts';
-export { mockProvider } from './providers/mock.ts';
+export { mockProvider, providerMode, resolveProvider } from './providers/index.ts';

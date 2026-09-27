@@ -172,6 +172,12 @@ importers:
       '@drift/db':
         specifier: workspace:*
         version: link:packages/db
+      '@drift/llm':
+        specifier: workspace:*
+        version: link:packages/llm
+      '@drift/prompts':
+        specifier: workspace:*
+        version: link:packages/prompts
       '@drift/safety':
         specifier: workspace:*
         version: link:packages/safety
@@ -334,6 +340,9 @@ importers:
 
   packages/llm:
     dependencies:
+      '@drift/contract':
+        specifier: workspace:*
+        version: link:../contract
       '@drift/db':
         specifier: workspace:*
         version: link:../db
@@ -341,7 +350,11 @@ importers:
         specifier: workspace:*
         version: link:../prompts
 
-  packages/prompts: {}
+  packages/prompts:
+    dependencies:
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
 
   packages/safety:
     dependencies:
