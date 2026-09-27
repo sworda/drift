@@ -17,14 +17,13 @@ import { Button } from '@/components/ui/button';
 
 import { CollectedList } from '@/features/privacy/collected-list';
 import { DeleteDialog } from '@/features/privacy/delete-dialog';
+import { ExportPanel } from '@/features/privacy/export-panel';
 import { ConsentSwitches, type ConsentSwitchItem } from '@/features/privacy/consent-switches';
 import { PrivacyTabs, type PrivacyTabId } from '@/features/privacy/tabs';
 import {
   COLLECTED_LOAD_ERROR,
   COLLECTED_LOAD_RETRY,
   COLLECTED_LOADING,
-  EXPORT_CTA,
-  EXPORT_PENDING_NOTE,
   TAB_COLLECTED,
   TAB_CONSENTS,
   TAB_DELETE,
@@ -120,15 +119,7 @@ export default function PrivacyPage() {
       {tab === 'export' ? (
         <section aria-label={TAB_EXPORT}>
           <h2 className="px-md pt-lg text-heading font-semibold text-text-primary">{TAB_EXPORT}</h2>
-          <div className="px-md py-lg">
-            {/* 本屏唯一吃 accent 的元素（UI-SPEC 视觉锚点契约）。 */}
-            <Button data-testid="export-cta" disabled className="mt-md w-full">
-              {EXPORT_CTA}
-            </Button>
-            <p className="mt-md whitespace-normal break-words text-label leading-relaxed text-text-secondary">
-              {EXPORT_PENDING_NOTE}
-            </p>
-          </div>
+          <ExportPanel />
         </section>
       ) : null}
 

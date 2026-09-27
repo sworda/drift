@@ -80,6 +80,13 @@ export const RECEIPT_EXPORT_LABEL = '导出回执';
 export const DELETE_RUNNING_COPY = '正在删除你的数据';
 export const DELETE_RUNNING_NOTE = '删除完成后会自动跳转到回执页';
 
+/** 导出 loading（UI-SPEC E9 loading 行，逐字）。 */
+export const EXPORT_PACKING_COPY = '正在打包你的数据';
+export const EXPORT_SLOW_NOTE = '数据较多，还在继续';
+
+/** 导出失败（UI-SPEC Error state 导出失败行，逐字）。 */
+export const EXPORT_FAILED_COPY = '导出没有完成。你的数据没有受到影响，重试一次即可。';
+
 /** 页面加载与加载失败（与空态必须可区分，UI-SPEC E9）。 */
 export const COLLECTED_LOADING = '正在读取「我们收集了什么」……';
 export const COLLECTED_LOAD_ERROR =

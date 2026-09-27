@@ -52,6 +52,10 @@ import {
   registerAccountDeletion,
   setAccountDeletionScheduler,
 } from './jobs/account-deletion.ts';
+import { registerExportBuild } from './jobs/export-build.ts';
+import { EXPORT_ARTIFACT_GC_QUEUE, registerExportArtifactGc } from './jobs/export-artifact-gc.ts';
+import { RETENTION_CLEANUP_QUEUE, registerRetentionCleanup } from './jobs/retention-cleanup.ts';
+import { setExportBoss } from '../modules/privacy/export-boss.ts';
 
 /** pg-boss 的专属 schema。drizzle 的 schemaFilter 必须排除它。 */
 export const PGBOSS_SCHEMA = 'pgboss';
@@ -122,6 +126,28 @@ export async function startWorker(): Promise<WorkerHandle> {
     exportArtifactsDir: env.EXPORT_ARTIFACTS_DIR,
     onEvent: (event, fields) => {
       logEvent(event, { jobName: ACCOUNT_DELETION_QUEUE, ...fields }, event.endsWith('partial') ? 'warn' : 'info');
+    },
+  });
+
+  // 一键导出（PRIV-04）与两个日清理作业（D-17）。
+  setExportBoss(boss);
+  await registerExportBuild(boss, {
+    // purgeDb：回执写回是 UPDATE privacy_action.payload —— 审计表族对 app_role 是
+    // REVOKE UPDATE（append-only），这个写入口与删除 worker 同一权限面（0004 的
+    // 列级 GRANT）。读取（collectExportBundle）purge_role 同样有权。
+    executor: purgeDb,
+    exportArtifactsDir: env.EXPORT_ARTIFACTS_DIR,
+  });
+  await registerExportArtifactGc(boss, {
+    exportArtifactsDir: env.EXPORT_ARTIFACTS_DIR,
+    onEvent: (event, fields) => {
+      logEvent(event, { jobName: EXPORT_ARTIFACT_GC_QUEUE, ...fields });
+    },
+  });
+  await registerRetentionCleanup(boss, {
+    executor: purgeDb,
+    onEvent: (event, fields) => {
+      logEvent(event, { jobName: RETENTION_CLEANUP_QUEUE, ...fields });
     },
   });
 

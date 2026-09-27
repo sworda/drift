@@ -11,6 +11,7 @@ import { chatRoutes } from '../modules/chat/routes.ts';
 import { consentRoutes } from '../modules/consent/routes.ts';
 import { friendshipRoutes } from '../modules/friendship/routes.ts';
 import { deleteRoutes } from '../modules/privacy/delete-routes.ts';
+import { exportRoutes } from '../modules/privacy/export-routes.ts';
 import { privacyRoutes } from '../modules/privacy/inventory-routes.ts';
 import { operatorSafetyRoutes } from '../modules/safety/routes.ts';
 import { logEvent } from '../obs/logger.ts';
@@ -48,6 +49,7 @@ export function createApp(): Hono {
   app.route('/', consentRoutes);
   app.route('/', privacyRoutes);
   app.route('/', deleteRoutes);
+  app.route('/', exportRoutes);
   app.route('/', characterRoutes);
   app.route('/', friendshipRoutes);
   app.route('/', chatRoutes);

@@ -318,8 +318,12 @@ describe('三层防线之二：any 通道（V.0 #2）', () => {
   }, 120_000);
 });
 
-describe('三层防线之一：as GatedText 只允许出现在唯一产出点', () => {
-  it('全仓 as GatedText 只命中 packages/safety/src/gateway.ts', () => {
+describe('三层防线之一：as GatedText 只允许出现在两个受控产出点', () => {
+  it('全仓 as GatedText 只命中 gateway.ts（产出）与 stored-gated.ts（历史恢复）', () => {
+    // Plan 11 起有两处受控提升：gateway.ts 是唯一**产出**点（网关），stored-gated.ts
+    // 是历史角色消息的**恢复**通道（导出渲染需要 GatedText，合法性来源是
+    // message.disclosure 的留证 —— 它不产生新的可投递文本）。这条断言的强度不变：
+    // 除这两处外，任何新的 as GatedText 都会在这里红。
     const grep = spawnSync('grep', ['-rn', 'as GatedText', 'packages', 'apps', '--include=*.ts'], {
       cwd: REPO_ROOT,
       encoding: 'utf8',
@@ -336,8 +340,9 @@ describe('三层防线之一：as GatedText 只允许出现在唯一产出点', 
         const assertionAt = code.indexOf('as GatedText');
         return commentAt === -1 || assertionAt < commentAt;
       });
-    expect(hits.length, `命中行：\n${hits.join('\\n')}`).toBe(1);
-    expect(hits[0]).toContain('packages/safety/src/gateway.ts');
+    expect(hits.length, `命中行：\n${hits.join('\\n')}`).toBe(2);
+    expect(hits.some((line) => line.includes('packages/safety/src/gateway.ts'))).toBe(true);
+    expect(hits.some((line) => line.includes('packages/safety/src/stored-gated.ts'))).toBe(true);
   });
 
   it('没有任何调用点用非空断言跳过网关返回值的收窄', () => {

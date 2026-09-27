@@ -16,3 +16,4 @@ export * from './gateway.ts';
 export * from './egress.ts';
 export * from './retention-words.ts';
 export * from './banned-terms.ts';
+export * from './stored-gated.ts';
