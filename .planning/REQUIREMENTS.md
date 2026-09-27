@@ -63,7 +63,7 @@
 - [ ] **PRIV-07**: 隐私政策如实披露「人格是用户数据的派生物，撤回同意会触发从干净快照重算 traits，但无法撤销此前已发生的对话」
 - [ ] **PRIV-08**: 所有个人信息设定最短保存期限并到期自动清理
 - [x] **PRIV-09**: 完成一次个人信息保护影响评估 (PIA) 并留档
-- [ ] **PRIV-10**: 与每个 LLM provider 签署委托处理协议，关闭其「数据用于模型改进」开关并留存配置证据；隐私政策列明受托方清单〔个保法第二十一条〕
+- [x] **PRIV-10**: 与每个 LLM provider 签署委托处理协议，关闭其「数据用于模型改进」开关并留存配置证据；隐私政策列明受托方清单〔个保法第二十一条〕
 - [ ] **PRIV-11**: 隐私中心「我们收集了什么」须如实列明「触发二级危机时，系统会将该事件通知运营者（不含对话内容）」〔PRIV-03 一致性 + D-09 引入的新数据流向〕
 
 ### 聊天基础体验 (CHAT)
@@ -345,7 +345,7 @@
 | PRIV-07 | Phase 1 | Pending |
 | PRIV-08 | Phase 1 | Pending |
 | PRIV-09 | Phase 1 | Complete |
-| PRIV-10 | Phase 1 | Pending |
+| PRIV-10 | Phase 1 | Complete |
 | PRIV-11 | Phase 1 | Pending |
 | CHAT-01 | Phase 1 | Pending |
 | CHAT-02 | Phase 1 | Complete |

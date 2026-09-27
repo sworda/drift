@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-13-PLAN.md
-last_updated: "2026-09-27T05:49:43.590Z"
+stopped_at: Completed 01-15-PLAN.md
+last_updated: "2026-09-27T06:15:46.418Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
-state_head: 2df7ef5e65ffa404845a9e6944aa8ff14358f5e9
+state_head: 6357586950a91f14c97f1fd13f15cef8ac0369e9
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 15
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 ## Current Position
 
 Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 8 of 15
+Plan: 9 of 15
 Status: Ready to execute
 Last activity: 2026-09-26 — Phase 01 execution started
 
@@ -65,6 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P05 | 30 min | 3 tasks | 35 files |
 | Phase 01 P06 | 51 min | 3 tasks | 21 files |
 | Phase 01 P13 | 38 min | 3 tasks | 19 files |
+| Phase 01 P15 | 21 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: registered_users 日对账告警登记为第五条 EGRESS_POINTS 出口（reconcile.publicnessWebhook，carriesUserText: false），并同步 egress_hash 与 COMPLY-11 登记；刻意不复用 notifyOperator、也不抽一个接受 string 的投递函数 — 它是生产源码里一条新的出站网络路径，不登记就正是这份注册表要防的失效模式。复用 notifyOperator 要么谎报一次危机，要么把 AcuteAlert 放宽成能装任何东西的类型；抽 postWecomText(content: string) 更糟 —— 接受任意字符串的导出投递函数正是 GatedText 方案要堵的缺口（AST 扫描看不见 string）。代价是两处 fetch 可能分叉，收益是两条出口的载荷类型各自都不可能承载文本。
 - [Phase 01]: publication 静态扫描覆盖四种加表形态而不只是 ALTER ADD TABLE，且列清单里解析不出类型的列一律 fail-closed — CREATE PUBLICATION FOR TABLE 是同一件事的另一种写法，FOR ALL TABLES 与 ADD TABLES IN SCHEMA 连表名都不必写 —— 只认 ADD TABLE 的扫描器会把这三种写法当成「没有加过任何表」而放行，那是比裸表名更彻底的绕过。解析不出类型意味着无法证明它不是向量列，唯一安全的方向是失败。
 - [Phase 01]: 日对账不挂进 pg-boss schedule：执行点是 nightly workflow；job 模块只提供唯一一份判定与投递实现并留下 registerPublicnessReconcile 供后续 plan 调用 — apps/api 的镜像不 COPY compliance/，运行中的进程读不到 git 声明的 registered_users。注册 schedule 只有两种收场：给它一个编造的声明值（对账拿运行时计数与自己比，永远相等，正是本 plan 禁止的装饰性门禁），或者让作业每天失败一次。nightly workflow 有完整工作树，是此刻唯一能真的对账的地方。
+- [Phase 01]: 四条必需句不抄进测试常量，而由 tools/ci/legal-required-sentences.test.ts 在运行时从 01-UI-SPEC.md 的 ## Copywriting Contract 逐行提取；PRIV-10 的 {受托方清单} 占位符按 ROUTES 填充，引导句其余部分逐字不动 — 把句子抄进测试等于制造第二处定义：改 UI-SPEC 时测试不会变红，而「绑定到过时契约的断言在测试全绿时不会被任何人发现」正是 Plan 01 要消灭的失效模式（同 design-tokens.test.ts 的理由）。提取不到对应行即抛错，所以行被改名或删除会立刻变红，而不是退化成一次宽松匹配。
+- [Phase 01]: PRIV-10 受托方清单逐字填入路由表里全部四家（含两家未启用与一家境外的 anthropic），清单的精度由紧随其后的一段正文承担，而不是靠改写引导句 — 验收要求清单集合等于 ROUTES 中 mock 之外的 provider 集合，而引导句字面说的是「会把你和它说的话交给下面这些服务商处理」—— 对尚未启用的 aliyun 与只接收合成文本的 anthropic 而言那句话此刻并不准确。改写引导句会让政策与界面文案分叉（T-15-03）；只列已启用的两家会让集合相等断言变成永远可被「先不启用」绕过的检查。因此引导句一个字不动，紧接一段正文如实写明「目前真正在处理你的话的只有两家」、aliyun 尚未收到任何内容、anthropic 在境外且在类型层就传不进真实原文。
+- [Phase 01]: 「改坏它会变红」这件事写成测试内注入（清空正文、删掉 PRIV-11 必需句两条），而不是执行者手上跑过一次的临时改文件；privacy.md 的 spec 相应改为惰性函数而非模块级常量 — 临时改文件只证明了执行那一刻，之后任何一次回归都无人看见（01-05 的同类处置）。改成注入后每个 PR 都证明一次。spec 必须惰性求值：写成模块级常量时，0 字节的 privacy.md 会让 requiredSentencesFor 在收集阶段抛错，(a) 的「size 大于 0」永远没机会跑，报错信息就成了「找不到引导句前半截」而不是真正的原因。
 
 ### Pending Todos
 
@@ -126,6 +130,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T05:49:00.382Z
-Stopped at: Completed 01-13-PLAN.md
+Last session: 2026-09-27T06:15:46.371Z
+Stopped at: Completed 01-15-PLAN.md
 Resume file: None
