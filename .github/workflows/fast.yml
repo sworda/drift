@@ -60,6 +60,13 @@ jobs:
         # 也就不需要第二次调用。
         run: node tools/ci/publicness.mjs
 
+      - name: RES-03 publication DDL 静态扫描
+        # db/publication/research_publication.sql 是 publication 的唯一真相源。裸表名或
+        # 向量列即失败。动态检查（查 pg_publication_tables）在 Phase 1 无被测对象，脚本
+        # 会明确打印 SKIP DYNAMIC_PUBLICATION_CHECK —— 该 skip 已登记 SKIPPED_CHECKS.md
+        # 且带解除条件，另有一条 L4 断言守着那条登记存在。
+        run: node tools/ci/publication-scan.mjs
+
       - name: COMPLY-11 登记与出口集合绑定（egress_hash）
         # 出口集合变了而 compliance/no-unlabeled-output.md 没被重新复核 → 非零退出。
         # 这是本仓库唯一一处 egress 哈希比对的**实现**：上一步的 ci:fast 里

@@ -1,0 +1,30 @@
+-- 研究库 publication 的**唯一真相源**（RES-03 / RES-02，RESEARCH §11.1）。
+--
+-- ⚠️ **任何 ADD TABLE 都必须带显式列清单。** 裸表名不得默认放行 —— 默认放行会在
+-- Phase 7 第一次复制发生时，把那之后新增的任何列（包括向量列）一并带进研究库，而
+-- 那一刻不会有任何检查变红。白名单必须是显式的列级白名单，不是表级默认放行。
+--
+-- ⚠️ **原文嵌入向量绝不进研究库**（RES-02）。嵌入反演是成熟攻击面：存了它，L0
+-- 「不存原文」在技术与法律上同时不成立，并构成对隐私中心文案的虚假陈述。因此
+-- tools/ci/publication-scan.mjs 对每个列出的 (表, 列) 反查 drizzle schema 的
+-- getSQLType()，匹配 vector / halfvec / sparsevec 即构建失败。
+--
+-- ── Phase 1 的内容：一个显式的空 publication ────────────────────────────────────
+-- 研究管道在 Phase 7。Phase 1 **不 apply** 本文件，但它必须在 git 里且被扫描 ——
+-- RES-03 的理由正是「必须在第一次复制发生前生效」。一份「等到 Phase 7 再写」的
+-- publication DDL 等于把这条防线推迟到它要防的事情已经发生之后。
+--
+-- 空 publication 是显式的：CREATE PUBLICATION 不带 FOR TABLE、不带 FOR ALL TABLES。
+-- FOR ALL TABLES 是本文件最危险的一种写法 —— 它连表名都不需要写就能把整库复制出去，
+-- 所以扫描器把它当成最严重的一种裸表名处理。
+--
+-- ── 新增一张表要走的流程（Phase 7 起） ──────────────────────────────────────────
+--   1. 在 packages/db/src/inventory.ts 的 DATA_INVENTORY 里登记该表的每一列与 layer；
+--   2. 在本文件写一条带**显式列清单**的 ALTER PUBLICATION ... ADD TABLE；
+--   3. 跑 node tools/ci/publication-scan.mjs，三条静态断言全绿；
+--   4. 删除 SKIPPED_CHECKS.md 里 DYNAMIC_PUBLICATION_CHECK 那一行，让动态检查在 CI 生效。
+--
+-- 形态示例（**注释内，不是可执行语句**）：ALTER PUBLICATION research_pub ADD TABLE
+-- l0_message_shape (id, conversation_id, turn_index, char_count);
+
+CREATE PUBLICATION research_pub;
