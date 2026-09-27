@@ -21,7 +21,17 @@ import { ESLint } from 'eslint';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { EGRESS_POINTS, TEXT_CARRYING_EGRESS_POINTS } from '@drift/safety';
+import { EGRESS_POINTS, TEXT_CARRYING_EGRESS_POINTS, safetyGateway } from '@drift/safety';
+
+// 第四个出口的实现。直接按路径 import 而不经包边界：它住在 apps/api 里，而注册表
+// 指的就是那个路径。alert.ts 刻意不 import config/env.ts 与 obs/logger.ts —— 后者在
+// 模块加载时校验环境变量并 exit 1，那会让本条断言无法在 ci:fast 里跑。
+import {
+  ACUTE_ALERT_FIELDS,
+  ACUTE_ALERT_FIELDS_MATCH_TYPE,
+  notifyOperator,
+  type AcuteAlert,
+} from '../../apps/api/src/modules/safety/alert.ts';
 
 // 哈希算法只有一份实现：这里 import 它，fast.yml 跑它的 CLI，人工更新登记也跑它。
 import { checkEgressHash, HASH_MISMATCH_MESSAGE } from './egress-hash.mjs';
@@ -326,6 +336,25 @@ describe('三层防线之一：as GatedText 只允许出现在唯一产出点', 
     expect(hits.length, `命中行：\n${hits.join('\\n')}`).toBe(1);
     expect(hits[0]).toContain('packages/safety/src/gateway.ts');
   });
+
+  it('没有任何调用点用非空断言跳过网关返回值的收窄', () => {
+    // safetyGateway 的返回是可判别联合，只有 gated 那一支带 text。用 `!.text` 把它
+    // 断言出来等于绕过收窄 —— 那正是「turn 外层 catch 里降级为直接下发」的写法形态。
+    const grep = spawnSync(
+      'grep',
+      ['-rn', '-e', '!\\.text', '-e', 'gated!', 'packages', 'apps', 'tests', '--include=*.ts'],
+      { cwd: REPO_ROOT, encoding: 'utf8' },
+    );
+    const hits = (grep.stdout ?? '')
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .filter((line) => !line.includes('/dist/'))
+      .filter((line) => {
+        const code = line.slice(line.indexOf(':', line.indexOf(':') + 1) + 1);
+        return !code.trimStart().startsWith('//');
+      });
+    expect(hits, `出现了对网关返回值的非空断言：\n${hits.join('\\n')}`).toEqual([]);
+  });
 });
 
 describe('绑定断言 2：COMPLY-11 登记与出口集合的 egress_hash 绑定（D-21）', () => {
@@ -395,6 +424,183 @@ describe('绑定断言 2：COMPLY-11 登记与出口集合的 egress_hash 绑定
     // 四条对外提供路径逐条覆盖 —— 少一条就说明有一个出口没被复核过。
     for (const point of EGRESS_POINTS) {
       expect(doc, `登记文件没有逐条覆盖出口 ${point.id}`).toContain(point.id);
+    }
+  });
+});
+
+describe('绑定断言 3：acute 告警载荷不含对话文本（SAFE-16 / T-06-04）', () => {
+  /**
+   * 特征串：一段不会自然出现在任何模板、日志或 id 里的中文。
+   * 它是本条断言的「示踪剂」—— 只要它出现在 webhook 载荷里，就说明有人把对话内容
+   * 接进了告警。
+   */
+  const TRACER = '霁蘅黟饕餮氤氲魍魎彧翾黼黻';
+  const MIN_LEAK_LENGTH = 6;
+
+  /** 返回第一段泄漏的子串（长度 >= minLength），没有泄漏则返回 null。 */
+  function findLeakedSubstring(serialized: string, secret: string, minLength: number): string | null {
+    for (let start = 0; start + minLength <= secret.length; start += 1) {
+      for (let end = secret.length; end - start >= minLength; end -= 1) {
+        const window = secret.slice(start, end);
+        if (serialized.includes(window)) return window;
+      }
+    }
+    return null;
+  }
+
+  it('子串检查器自身有效 —— 一个故意泄漏的载荷必须被抓到（防止空真通过）', () => {
+    const leaky = JSON.stringify({ msgtype: 'text', text: { content: `触发消息：${TRACER}` } });
+    expect(findLeakedSubstring(leaky, TRACER, MIN_LEAK_LENGTH)).not.toBeNull();
+    // 一段与特征串无关的载荷不该被误判。
+    expect(findLeakedSubstring('{"a":"无关内容"}', TRACER, MIN_LEAK_LENGTH)).toBeNull();
+  });
+
+  it('走完 acute 流程到 notifyOperator 的载荷构造点，载荷不含触发消息的任何 6 字以上子串', async () => {
+    // ① 触发消息带着特征串进入网关，分类为 crisis。
+    const candidateText = `我撑不住了，${TRACER}。`;
+    const gated = await safetyGateway({
+      candidateText,
+      classification: { classifierStatus: 'ok', level: 'crisis' },
+      conversationStatus: 'active',
+      recordSafetyEvent: () => {
+        throw new Error('escalated 分支的 safety_event 在 Plan 07 落地，此处不该被调用');
+      },
+    });
+    // ② crisis ⇒ 不产出 GatedText，走 acute 告警这一条出口。
+    expect(gated.outcome).toBe('escalated');
+    if (gated.outcome !== 'escalated') return;
+    expect(gated.level).toBe('crisis');
+
+    // ③ 构造告警载荷并投递（webhook 用 mock 拦截，不出网）。
+    const alert: AcuteAlert = {
+      userId: 'usr_tracer',
+      conversationId: 'cnv_tracer',
+      riskLevel: 'crisis',
+      occurredAt: new Date('2026-09-27T10:00:00.000Z'),
+      safetyEventId: 'sev_tracer',
+    };
+    let capturedBody = '';
+    const fetchImpl: typeof fetch = (_input, init) => {
+      capturedBody = typeof init?.body === 'string' ? init.body : String(init?.body ?? '');
+      return Promise.resolve(
+        new Response(JSON.stringify({ errcode: 0, errmsg: 'ok' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    };
+    const result = await notifyOperator(alert, {
+      webhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test',
+      mentionedList: ['@all'],
+      fetchImpl,
+    });
+    expect(result.delivered).toBe(true);
+
+    // ④ 断言：整段载荷里没有触发消息的任何 6 字以上片段。
+    expect(capturedBody.length).toBeGreaterThan(0);
+    const leaked = findLeakedSubstring(capturedBody, candidateText, MIN_LEAK_LENGTH);
+    expect(leaked, `告警载荷泄漏了对话片段：${leaked ?? ''}\n载荷：${capturedBody}`).toBeNull();
+    // 特征串本身也单独查一次（上面的窗口扫描已覆盖，这一行是给读失败信息的人看的）。
+    expect(capturedBody).not.toContain(TRACER);
+  });
+
+  it('AcuteAlert 恰好五个字段，类型体里不存在任何对话文本字段', () => {
+    expect([...ACUTE_ALERT_FIELDS]).toEqual([
+      'userId',
+      'conversationId',
+      'riskLevel',
+      'occurredAt',
+      'safetyEventId',
+    ]);
+    expect(ACUTE_ALERT_FIELDS).toHaveLength(5);
+    // ACUTE_ALERT_FIELDS_MATCH_TYPE 是编译期断言（给类型加字段而不改清单 ⇒ tsc 报错）；
+    // 这里确认它确实是 true，即那条编译期断言没有被改成一个恒真的形状。
+    expect(ACUTE_ALERT_FIELDS_MATCH_TYPE).toBe(true);
+
+    const source = readFileSync(
+      path.join(REPO_ROOT, 'apps/api/src/modules/safety/alert.ts'),
+      'utf8',
+    );
+    const body = /export interface AcuteAlert \{([\s\S]*?)\n\}/u.exec(source);
+    expect(body, 'alert.ts 里找不到 AcuteAlert 的类型体').not.toBeNull();
+    const typeBody = body?.[1] ?? '';
+    for (const forbidden of ['text', 'content', 'message', 'reply', 'snippet']) {
+      expect(
+        typeBody.toLowerCase(),
+        `AcuteAlert 的类型体出现了 ${forbidden} —— 告警不得携带对话内容（SAFE-16）`,
+      ).not.toContain(forbidden);
+    }
+    // 字段数 = 类型体里的 readonly 行数。
+    const fieldLines = typeBody.split('\n').filter((line) => line.includes('readonly '));
+    expect(fieldLines).toHaveLength(5);
+  });
+
+  it('投递失败如实返回（SAFE-16：失败直接进 unavailable，不经 pending）', async () => {
+    const alert: AcuteAlert = {
+      userId: 'usr_x',
+      conversationId: 'cnv_x',
+      riskLevel: 'crisis',
+      occurredAt: new Date('2026-09-27T10:00:00.000Z'),
+      safetyEventId: 'sev_x',
+    };
+    const transport = { webhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=x' };
+
+    // 企业微信对无效 webhook 同样返回 200 —— 业务码非 0 必须算失败，否则状态机会把
+    // 一次没送到的告警置成 pending，然后等一个永远不会来的运营者确认。
+    const businessError = await notifyOperator(alert, {
+      ...transport,
+      fetchImpl: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ errcode: 93_000, errmsg: 'invalid webhook url' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+    });
+    expect(businessError).toEqual({
+      delivered: false,
+      reason: 'business_error',
+      httpStatus: 200,
+      errcode: 93_000,
+    });
+
+    const httpError = await notifyOperator(alert, {
+      ...transport,
+      fetchImpl: () => Promise.resolve(new Response('nope', { status: 500 })),
+    });
+    expect(httpError.delivered).toBe(false);
+
+    const networkError = await notifyOperator(alert, {
+      ...transport,
+      fetchImpl: () => Promise.reject(new Error('ECONNRESET')),
+    });
+    expect(networkError).toEqual({
+      delivered: false,
+      reason: 'network_error',
+      httpStatus: null,
+      errcode: null,
+    });
+  });
+
+  it('第四个出口不参与 GatedText 集合相等（它的约束是「不含对话文本」，不是「只接受 GatedText」）', () => {
+    const alertPoint = EGRESS_POINTS.find((point) => point.id === 'alert.acuteWebhook');
+    expect(alertPoint).toBeDefined();
+    expect(alertPoint && 'carriesUserText' in alertPoint ? alertPoint.carriesUserText : true).toBe(
+      false,
+    );
+    expect(TEXT_CARRYING_EGRESS_POINTS.map((point) => point.id)).not.toContain('alert.acuteWebhook');
+  });
+});
+
+describe('注册表指向的模块与函数真实存在', () => {
+  it('每一项的 module 都在磁盘上，且该文件里出现了这个 fn 名', () => {
+    for (const point of EGRESS_POINTS) {
+      const absolute = path.join(REPO_ROOT, point.module);
+      const source = readFileSync(absolute, 'utf8');
+      expect(
+        source,
+        `EGRESS_POINTS 的 ${point.id} 指向的 ${point.module} 里没有 ${point.fn}`,
+      ).toContain(point.fn);
     }
   });
 });

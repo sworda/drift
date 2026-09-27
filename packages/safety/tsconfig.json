@@ -4,7 +4,10 @@
     "rootDir": "src",
     "outDir": "dist",
     "emitDeclarationOnly": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src/**/*.ts"

@@ -395,10 +395,15 @@ describe('tracer —— 一条真实消息打穿全链路', () => {
     // GatedText 只能由 safetyGateway 产出 —— 测试也不例外。这一句本身就是那条约束
     // 的一次使用证明：想绕过网关就得手写一次类型断言，而 eslint 的仓库级禁令会拦
     //（唯一豁免写在 packages/safety/src/gateway.ts 的使用点上）。
-    const gated = safetyGateway({
+    // recordSafetyEvent 是必填的（Plan 06）。这一句候选文本不命中挽留词表也不升级，
+    // 所以它不会被调用 —— 传一个「被调用即失败」的 sink，比传一个空函数更诚实。
+    const gated = await safetyGateway({
       candidateText: '这是断连期间写入的角色消息。',
       classification: { classifierStatus: 'ok', level: 'none' },
       conversationStatus: 'active',
+      recordSafetyEvent: () => {
+        throw new Error('这条候选文本不该触发 safety_event');
+      },
     });
     expect(gated.outcome).toBe('gated');
     if (gated.outcome !== 'gated') return;

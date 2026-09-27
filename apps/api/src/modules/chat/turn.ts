@@ -41,6 +41,7 @@ import {
   insertUserMessage,
   message,
   personaVersion,
+  safetyEvent,
   tx,
   type MessageProvenance,
 } from '@drift/db';
@@ -64,7 +65,7 @@ export interface TurnResult {
   readonly reply:
     | { readonly outcome: 'gated'; readonly id: string; readonly seq: number; readonly delivered: number }
     | { readonly outcome: 'escalated'; readonly level: 'elevated' | 'crisis' }
-    | { readonly outcome: 'refused'; readonly reason: 'conversation_ended' };
+    | { readonly outcome: 'refused'; readonly reason: 'conversation_ended' | 'retention_phrase' };
 }
 
 export async function runTurn(input: {
@@ -179,10 +180,31 @@ export async function runTurn(input: {
     );
 
     // ── 5. 出站安全网关 —— GatedText 的唯一来源 ───────────────────────────
-    const gated = safetyGateway({
+    // ⚠️ recordSafetyEvent 是必填的，不是可选项：挽留拦截必须同时留下一条证据，
+    // 而 packages/safety 不连数据库，所以写入动作由这里在自己的短事务里完成。
+    // 事务边界与 llm_call 同理（见文件头）：崩溃只可能留下「有审计行、没有消息」。
+    const gated = await safetyGateway({
       candidateText: candidate.text,
       classification: parseClassification(classified.text),
       conversationStatus: prepared.conversation.status,
+      recordSafetyEvent: async (draft) => {
+        await tx(async (t) => {
+          await t.insert(safetyEvent).values({
+            userId: input.userId,
+            conversationId: prepared.conversation.id,
+            // 触发这次判定的那条用户消息。候选回复没有落库（它被拦下了），
+            // 「当时判的是哪段文本」由 candidateReplyHash 回答。
+            messageId: prepared.userMessage.id,
+            level: draft.level,
+            ruleHits: draft.ruleHits,
+            classifierStatus: draft.classifierStatus,
+            classifierModelSnapshot: classified.modelSnapshot,
+            candidateReplyHash: draft.candidateReplyHash,
+            candidateReplyLen: draft.candidateReplyLen,
+            overrideApplied: draft.overrideApplied,
+          });
+        });
+      },
     });
 
     if (gated.outcome !== 'gated') {
