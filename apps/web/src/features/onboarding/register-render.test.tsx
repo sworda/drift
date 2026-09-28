@@ -199,8 +199,12 @@ const CONSENS_INDEX = {
 } as const;
 
 describe('(e) 未满 18 是无出口的法定终态拒绝（COMPLY-07）', () => {
-  it('渲染终态拒绝文案，且整页 button 与 link 数量均为 0', () => {
+  it('点「下一步」才进入终态拒绝；进入后整页 button 与 link 数量均为 0', () => {
     render(<OnboardingSteps now={NOW} initialStep={0} initialAccount={MINOR} />);
+    // 未满 18 的生日**不再**在输入当下就把页面锁死 —— 必须先明确点「下一步」。
+    expect(screen.queryByTestId(AGE_GATE_REJECTION_TESTID)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: NEXT_STEP_LABEL }));
+
     const rejection = screen.getByTestId(AGE_GATE_REJECTION_TESTID);
     expect(rejection.textContent).toContain(AGE_GATE_REJECTION);
     // 容器内没有出口。
@@ -222,10 +226,18 @@ describe('(e) 未满 18 是无出口的法定终态拒绝（COMPLY-07）', () =>
     expect(screen.queryByTestId(AGE_GATE_REJECTION_TESTID)).toBeNull();
   });
 
-  it('把生日改成未满 18 之后，出口消失（不是一次性的初始态）', () => {
+  it('日历控件吐出完整日期的当下不锁死页面，点「下一步」后出口才消失', () => {
     render(<OnboardingSteps now={NOW} initialStep={0} initialAccount={ADULT} />);
     expect(screen.queryAllByRole('button').length).toBeGreaterThan(0);
+
+    // 原生 date 控件的上下箭头能在用户没输入的情况下直接给出一个完整日期。那一刻
+    // 必须还能把日期改回去，不能被换进无出口的终态。
     fireEvent.change(screen.getByLabelText(/出生日期/u), { target: { value: '2015-06-15' } });
+    expect(screen.queryByTestId(AGE_GATE_REJECTION_TESTID)).toBeNull();
+    expect((screen.getByLabelText(/出生日期/u) as HTMLInputElement).value).toBe('2015-06-15');
+
+    // 拿着未满 18 的日期明确点「下一步」—— 这时才是法定终态，没有出口。
+    fireEvent.click(screen.getByRole('button', { name: NEXT_STEP_LABEL }));
     expect(screen.getByTestId(AGE_GATE_REJECTION_TESTID)).toBeDefined();
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });

@@ -36,7 +36,7 @@ import {
   PASSWORD_INPUT_ID,
   type AccountFields,
 } from './account-fields';
-import { AgeGate, isRejectedByAgeGate } from './age-gate';
+import { AgeGate, AgeGateRejection, isRejectedByAgeGate } from './age-gate';
 import { ConsentCheckboxes } from './consent-checkboxes';
 import {
   INITIAL_CONSENT_SELECTION,
@@ -143,9 +143,10 @@ export function OnboardingSteps({
   const [pending, setPending] = useState(false);
   const [submitFailed, setSubmitFailed] = useState(false);
   const [done, setDone] = useState(false);
+  // 18 岁法定终态的开关。**只**由用户明确点击「下一步」/提交置位，不随生日输入框的
+  // 每一次变化触发（理由见 confirmAgeGateIfRejected）。
+  const [ageRejected, setAgeRejected] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-
-  const rejected = isRejectedByAgeGate(account.birthDate, now);
 
   const toggleConsent = useCallback((scope: ConsentScope, value: boolean) => {
     // ⚠️ 唯一的同意状态转换入口，且只吃一个 scope。
@@ -164,6 +165,23 @@ export function OnboardingSteps({
     : {};
   const accountErrorFor = (id: string): string | undefined => accountErrors[id];
 
+  /**
+   * 未满 18 的法定期终态拒绝 —— **只在用户明确尝试继续时**进入。
+   *
+   * ⚠️ 之前这里是对 account.birthDate 的实时判定：生日一凑成完整日期就立刻把整张表单
+   * 替换成终态页。但原生 `<input type="date">` 的上下箭头是一个「微调器」，它能在用户
+   * 什么都没输入的情况下直接吐出一个完整日期（例如当天）。那一刻终态被一个**非本意的**
+   * 控件值触发，而终态按 COMPLY-07 没有任何出口 —— 用户再也没法把日期改回去。
+   * 终态本身是法律要求的不可逆结果，但触发它的必须是「拿着这个日期点了继续」这个明确
+   * 动作，而不是日历控件的一次误触。（服务端对未满 18 一律 403，这里的终态页只是礼貌
+   * 呈现，推迟触发时机不削弱合规。）
+   */
+  const confirmAgeGateIfRejected = useCallback((): boolean => {
+    if (!isRejectedByAgeGate(account.birthDate, now)) return false;
+    setAgeRejected(true);
+    return true;
+  }, [account.birthDate, now]);
+
   const focusFirstInvalid = useCallback(() => {
     const id = firstInvalidContactFieldId(contact);
     if (id === null) return;
@@ -177,6 +195,8 @@ export function OnboardingSteps({
   }, [account, now]);
 
   const onSubmit = useCallback(async () => {
+    // 年龄终态优先于「未完成不得提交」：未满 18 不是一个能靠补齐字段绕过的失败。
+    if (confirmAgeGateIfRejected()) return;
     if (!canSubmit || pending) return;
     setPending(true);
     setSubmitFailed(false);
@@ -195,7 +215,16 @@ export function OnboardingSteps({
     } finally {
       setPending(false);
     }
-  }, [account, canSubmit, consents, contact, focusFirstInvalid, pending, submit]);
+  }, [
+    account,
+    canSubmit,
+    confirmAgeGateIfRejected,
+    consents,
+    contact,
+    focusFirstInvalid,
+    pending,
+    submit,
+  ]);
 
   // 注册成功：落点是角色库（成功标准 1 的走查顺序）。仍是同一颗主 CTA 的语义 ——
   // 「完成注册，开始使用」之后的「开始使用」。
@@ -216,17 +245,11 @@ export function OnboardingSteps({
   }
 
   // 18 岁终态拒绝：整页只剩那段文案，**没有**任何出口（含本组件的下一步按钮）。
-  if (rejected) {
+  if (ageRejected) {
     return (
       <main className="mx-auto flex max-w-[36rem] flex-col gap-6 p-6">
         <h1 className={STEP_TITLE_CLASS}>{STEP_TITLES[0]}</h1>
-        <AgeGate
-          birthDate={account.birthDate}
-          now={now ?? undefined}
-          onBirthDateChange={(birthDate) => {
-            setAccount((current) => ({ ...current, birthDate }));
-          }}
-        />
+        <AgeGateRejection />
       </main>
     );
   }
@@ -323,7 +346,6 @@ export function OnboardingSteps({
             </Field>
             <AgeGate
               birthDate={account.birthDate}
-              now={now ?? undefined}
               onBirthDateChange={(birthDate) => {
                 setAccount((current) => ({ ...current, birthDate }));
               }}
@@ -400,6 +422,9 @@ export function OnboardingSteps({
               type="button"
               onClick={() => {
                 if (step === 0) {
+                  // 年龄终态优先于字段级校验：未满 18 不是「某个字段没填好」，它整页换成
+                  // 无出口的法定拒绝，因此不渲染字段错误、也不给修正入口。
+                  if (confirmAgeGateIfRejected()) return;
                   if (!accountReady) {
                     setShowAccountErrors(true);
                     focusFirstInvalidAccount();
