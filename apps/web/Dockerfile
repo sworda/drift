@@ -27,6 +27,14 @@ COPY tsconfig.base.json ./
 COPY packages/ packages/
 COPY apps/web/ apps/web/
 
+# 浏览器侧可见的 apps/api 地址。NEXT_PUBLIC_* 由 Next 在**构建期**内联进客户端
+# bundle（DefinePlugin 语义），运行时塞环境变量改不动产物 —— 缺了它，apps/web/src
+# 里五处 fetch 会静默回退到 http://127.0.0.1:3001，也就是「用户自己机器上的 3001
+# 端口」。ARG 必须早于使用它的 RUN；ENV 把 build 参数转成构建期环境变量（Next 读的
+# 是 process.env，只声明 ARG 不够）。
+ARG NEXT_PUBLIC_API_ORIGIN
+ENV NEXT_PUBLIC_API_ORIGIN=$NEXT_PUBLIC_API_ORIGIN
+
 WORKDIR /app/apps/web
 RUN pnpm exec next build
 

@@ -88,6 +88,10 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        # NEXT_PUBLIC_* 由 Next 在构建期内联进客户端 bundle（见 apps/web/Dockerfile）。
+        # 构建期不传，产物会烧进回退值 http://127.0.0.1:3001（用户自己机器）。
+        NEXT_PUBLIC_API_ORIGIN: ${NEXT_PUBLIC_API_ORIGIN:-}
     restart: unless-stopped
     depends_on:
       api:
