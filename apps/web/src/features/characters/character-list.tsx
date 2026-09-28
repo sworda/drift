@@ -53,7 +53,7 @@ export function CharacterList({ characters }: CharacterListProps) {
             </span>
             <span className="flex min-w-0 flex-col">
               <span className="flex min-w-0 items-center gap-sm">
-                <span className="truncate text-heading text-text-primary">{character.name}</span>
+                <span className="truncate text-heading font-semibold text-text-primary">{character.name}</span>
                 {character.isAi ? <AiBadge data-testid="ai-badge-character-detail" /> : null}
               </span>
               <span className="truncate text-label text-text-secondary">{character.blurb}</span>

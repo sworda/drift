@@ -33,6 +33,19 @@
   --text-heading: var(--text-heading);
   --text-display: var(--text-display);
 
+  /* ⚠️ 字号与行高在 Tailwind v4 里是**两条** theme 键，不是一条：
+   *     --text-<档位>               字号
+   *     --text-<档位>--line-height  配对行高（同族还有 --text-<档位>--font-weight）
+   * text-label 这类 utility 会把基准键与配对键**一起**消费。只转发字号那半边时，
+   * utility 照常生成 font-size，却**不生成 line-height，也不报错** —— 与上面间距
+   * 那一段是同一类静默失效（Tailwind 4 对未知键静默跳过，不是编译失败）。
+   * 行高数值仍由 tokens.css（UI-SPEC ## Typography）拥有，这里只做转发。
+   * tools/ci/theme-bridge-completeness.test.ts 机械守住这条配对不变量。 */
+  --text-label--line-height: var(--text-label--line-height);
+  --text-body--line-height: var(--text-body--line-height);
+  --text-heading--line-height: var(--text-heading--line-height);
+  --text-display--line-height: var(--text-display--line-height);
+
   /* ⚠️ 间距档位必须逐个桥接进 --spacing-* 命名空间，否则 px-md / gap-md-tight
    * 这类 utility **不会报错、只是不生成任何样式** —— 一个在源码里看起来完全正常、
    * 在页面上却毫无内边距的类名。Tailwind 4 对未知 utility 是静默跳过，不是编译失败。 */
