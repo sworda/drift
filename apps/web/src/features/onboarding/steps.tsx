@@ -189,7 +189,7 @@ export function OnboardingSteps({
   // 「完成注册，开始使用」之后的「开始使用」。
   if (done) {
     return (
-      <main className="mx-auto flex max-w-xl flex-col gap-6 p-6">
+      <main className="mx-auto flex max-w-[36rem] flex-col gap-6 p-6">
         <h1 className={STEP_TITLE_CLASS}>{REGISTER_DONE_TITLE}</h1>
         <p className="text-base text-text-secondary">{REGISTER_DONE_BODY}</p>
         <Link
@@ -206,7 +206,7 @@ export function OnboardingSteps({
   // 18 岁终态拒绝：整页只剩那段文案，**没有**任何出口（含本组件的下一步按钮）。
   if (rejected) {
     return (
-      <main className="mx-auto flex max-w-xl flex-col gap-6 p-6">
+      <main className="mx-auto flex max-w-[36rem] flex-col gap-6 p-6">
         <h1 className={STEP_TITLE_CLASS}>{STEP_TITLES[0]}</h1>
         <AgeGate
           birthDate={account.birthDate}
@@ -220,7 +220,7 @@ export function OnboardingSteps({
   }
 
   return (
-    <main className="mx-auto flex max-w-xl flex-col gap-6 p-6">
+    <main className="mx-auto flex max-w-[36rem] flex-col gap-6 p-6">
       {/* 全屏唯一的 28px。 */}
       <h1 className={STEP_TITLE_CLASS}>{STEP_TITLES[step]}</h1>
 

@@ -50,6 +50,27 @@
   --spacing-conversation-row: var(--size-conversation-row);
 }
 
+/* ⚠️ 裸键尺寸 utility 禁令（Plan 01-14 checkpoint 修复）。
+ *
+ * 上面把 --space-* 桥接进 --spacing-* 之后，Tailwind 的**宽度族** utility 会被劫持：
+ * w / min-w / max-w / basis / inline / min-inline / max-inline 的 themeKeys 顺序是
+ * ["--<family>", "--spacing", "--container"] —— --spacing 排在 --container 之前，
+ * 于是项目桥接的 --spacing-xl(32px) 先命中，max-w-xl 渲染成 32px；而 stock Tailwind
+ * 里 max-w-xl 解析到 var(--container-xl) = 36rem。中文可在任意字符之间断行，32px 再
+ * 减去 p-6 的左右内边距会把内容盒压到 0 宽 —— 这就是注册页「每行一个汉字」的成因。
+ *
+ * 实测（tailwindcss@4.3.3，**重新构建镜像后的产物 CSS**）：补 --container-* 无效。
+ * 即使显式声明 --container-xl:36rem，产物里 .max-w-xl 仍是 max-width:var(--space-xl)，
+ * 且这些 --container-* 因无人解析而根本不会被 emit。所以本文件**不声明** --container-*
+ * （声明了也只是会误导人的死配置）。同理**不得**重命名 --space-* 与 --spacing-* 去回避
+ * 冲突：xs/sm/md/lg/xl/2xl/3xl 是 01-UI-SPEC.md ## Spacing Scale 的契约 token 名，
+ * 全仓 216 处间距 utility 依赖它们。
+ *
+ * 因此本项目**禁止**裸键 w/min-w/max-w/basis/inline/min-inline/max-inline-<xs|sm|md|lg|xl|2xl|3xl>：
+ * 写显式任意值（max-w-[36rem]）或项目命名 token（h-ai-bar / size-touch / size-conversation-row）。
+ * tools/ci/ui-size-scale.test.ts 机械扫描 apps/web/src，让这一类用法不可能再合入。
+ */
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

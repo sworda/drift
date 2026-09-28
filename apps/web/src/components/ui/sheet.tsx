@@ -53,8 +53,8 @@ function SheetContent({
           side === "bottom" &&
             "inset-x-0 bottom-0 max-h-[70dvh] rounded-t-lg border-t border-border p-4",
           side === "top" && "inset-x-0 top-0 rounded-b-lg border-b border-border p-4",
-          side === "right" && "inset-y-0 right-0 h-full w-3/4 max-w-sm border-l border-border p-4",
-          side === "left" && "inset-y-0 left-0 h-full w-3/4 max-w-sm border-r border-border p-4",
+          side === "right" && "inset-y-0 right-0 h-full w-3/4 max-w-[24rem] border-l border-border p-4",
+          side === "left" && "inset-y-0 left-0 h-full w-3/4 max-w-[24rem] border-r border-border p-4",
           className
         )}
         {...props}
