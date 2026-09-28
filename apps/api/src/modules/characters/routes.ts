@@ -54,5 +54,9 @@ characterRoutes.get('/characters/:id', async (c) => {
 
   const row = rows[0];
   if (row === undefined) return c.json({ error: 'not_found' }, 404);
-  return c.json({ character: { ...row, isAi: true } });
+  // dossier 列是 JSONB（PersonaDossier：{ markdown, tokenBudget }），而 web 的
+  // 角色详情契约里 dossier 是**字符串**（character-detail.tsx 直接 .split('\n\n')）。
+  // 这里只把 markdown 吐出去；tokenBudget 是喂 prompt 用的内部字段（chat/turn.ts），
+  // 不该出现在面向渲染层的响应里。
+  return c.json({ character: { ...row, dossier: row.dossier.markdown, isAi: true } });
 });
