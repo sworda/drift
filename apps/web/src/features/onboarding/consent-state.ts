@@ -43,6 +43,16 @@ export function requiredSatisfied(selection: ConsentSelection): boolean {
   return REQUIRED_SCOPES.every((scope) => selection[scope]);
 }
 
+/**
+ * 尚未勾选的必选项，按 CONSENT_SCOPES 的顺序返回。
+ *
+ * 主 CTA 的禁用是契约强制的，屏幕就必须说得出「还差哪几项」—— 这个函数是那行说明的
+ * 唯一数据来源（label 由调用方从 CONSENT_SCOPE_SPECS 取，不在这里硬编码）。
+ */
+export function missingRequiredScopes(selection: ConsentSelection): readonly ConsentScope[] {
+  return REQUIRED_SCOPES.filter((scope) => !selection[scope]);
+}
+
 /** 提交给服务端的形态。缺项视为未授权，因此原样传五项。 */
 export function toRequestPayload(selection: ConsentSelection): Record<ConsentScope, boolean> {
   return { ...selection };

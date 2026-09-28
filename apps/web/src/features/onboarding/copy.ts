@@ -27,6 +27,21 @@ export const REGISTER_SUBMIT_ERROR =
 export const REGISTER_RETRY_LABEL = '重试提交';
 
 /**
+ * 步骤 0 的字段级错误文案。
+ *
+ * ⚠️ 这一组之所以存在，是因为步骤 0 的「下一步」**不再因未填完而禁用**（理由见
+ * steps.tsx）：用户点得动，点下去就必须被告知还差什么。每一条都必须含「下一步做什么」，
+ * 且说得出可执行的门槛（如密码的「至少 8 位」）—— UI-SPEC ## 文案语气基线明文要求
+ * 「错误文案必须含『下一步做什么』，禁止只描述问题」。
+ */
+export const INVITE_CODE_REQUIRED_ERROR = '请填写邀请码 —— 它是一次性的准入凭证，注册时必须填。';
+export const EMAIL_FORMAT_ERROR = '请填写有效的邮箱地址，格式像 name@example.com。';
+export const PASSWORD_TOO_SHORT_ERROR = '密码至少 8 位，请再加几个字符。';
+export const NAME_REQUIRED_ERROR = '请填写昵称 —— 角色会用这个名字称呼你。';
+export const BIRTH_DATE_REQUIRED_ERROR =
+  '请选择一个完整的出生日期（年-月-日），我们用它确认你已满 18 周岁。';
+
+/**
  * 紧急联系人字段说明（R1.23）。
  *
  * ⚠️ 它必须渲染在 Field 的 description 行，**不是** placeholder：占位符在用户开始输入
@@ -59,3 +74,14 @@ export const NEXT_STEP_LABEL = '下一步';
 /** 注册成功的落点提示（Plan 14：走查顺序 注册 → 角色库）。 */
 export const REGISTER_DONE_TITLE = '注册完成';
 export const REGISTER_DONE_BODY = '你已经注册成功。接下来去角色库挑一个感兴趣的角色，加为好友后就可以开始聊了。';
+
+/**
+ * 主 CTA 处于禁用态时，写在它旁边的一行原因说明。
+ *
+ * UI-SPEC ## 交互契约（第 401 行）规定两项必选任一未勾选时主 CTA **必须禁用**；
+ * ## 文案语气基线（第 389 行）又规定错误文案**必须含下一步做什么**。禁用态没有
+ * 「提交后报错」这个出口，所以禁用原因必须自己说出来 —— 这一行就是那个出口。
+ * `{缺失项}` 由 CONSENT_SCOPE_SPECS[scope].label 逐项填入（不硬编码文案）。
+ */
+export const MISSING_REQUIRED_CONSENT_NOTE = '还差必选同意项：{缺失项}。勾上后才能完成注册。';
+export const MISSING_REQUIRED_PLACEHOLDER = '{缺失项}';

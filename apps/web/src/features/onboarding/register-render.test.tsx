@@ -30,12 +30,25 @@ import {
   CONTACT_FIELD_DESCRIPTION,
   CONTACT_FORMAT_ERROR,
   CONTACT_PHONE_PLACEHOLDER,
+  EMAIL_FORMAT_ERROR,
+  INVITE_CODE_REQUIRED_ERROR,
   NEXT_STEP_LABEL,
+  PASSWORD_TOO_SHORT_ERROR,
   REGISTER_CTA,
   REGISTER_SUBMIT_ERROR,
 } from './copy';
 import { CONTACT_NAME_INPUT_ID, CONTACT_PHONE_INPUT_ID } from './emergency-contact';
-import { OnboardingSteps, SUBMIT_ERROR_TESTID, type AccountFields } from './steps';
+import {
+  INITIAL_ACCOUNT,
+  INVITE_CODE_INPUT_ID,
+  PASSWORD_INPUT_ID,
+} from './account-fields';
+import {
+  MISSING_REQUIRED_TESTID,
+  OnboardingSteps,
+  SUBMIT_ERROR_TESTID,
+  type AccountFields,
+} from './steps';
 
 const ADULT: AccountFields = {
   inviteCode: 'invite-1',
@@ -314,5 +327,93 @@ describe('提交失败保留已填内容 + 全屏唯一 28px', () => {
       />,
     );
     expect(container.querySelectorAll('[class*="text-[28px]"]')).toHaveLength(1);
+  });
+});
+
+describe('(h) 步骤 0「下一步」不禁用：点击时校验、报错、聚焦第一个出错字段、不前进', () => {
+  it('只填 6 位密码 ⇒ 错误行渲染、焦点在密码框、且没有前进到步骤 1', () => {
+    render(
+      <OnboardingSteps
+        now={NOW}
+        initialStep={0}
+        initialAccount={{ ...ADULT, password: 'sixchr' }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: NEXT_STEP_LABEL }));
+
+    // 仍停在步骤 0：邀请码字段还在，紧急联系人的「称呼」没有出现。
+    expect(screen.getByLabelText(/邀请码/u)).toBeDefined();
+    expect(screen.queryByLabelText(/^称呼/u)).toBeNull();
+    // 错误文案渲染出来，且焦点落在密码框（第一个出错字段）。
+    expect(screen.getByText(PASSWORD_TOO_SHORT_ERROR)).toBeDefined();
+    expect(document.activeElement, '焦点没有落在密码框上').toBe(
+      document.getElementById(PASSWORD_INPUT_ID),
+    );
+  });
+
+  it('修正密码后再次点击「下一步」可以前进到步骤 1', () => {
+    render(
+      <OnboardingSteps
+        now={NOW}
+        initialStep={0}
+        initialAccount={{ ...ADULT, password: 'sixchr' }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: NEXT_STEP_LABEL }));
+    expect(screen.queryByLabelText(/^称呼/u)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText(/密码/u), { target: { value: 'longenough' } });
+    fireEvent.click(screen.getByRole('button', { name: NEXT_STEP_LABEL }));
+    expect(screen.getByLabelText(/^称呼/u)).toBeDefined();
+  });
+
+  it('全空的账号字段 ⇒ 焦点落在邀请码，且多条字段错误同时渲染', () => {
+    render(<OnboardingSteps now={NOW} initialStep={0} initialAccount={INITIAL_ACCOUNT} />);
+    fireEvent.click(screen.getByRole('button', { name: NEXT_STEP_LABEL }));
+
+    expect(document.activeElement).toBe(document.getElementById(INVITE_CODE_INPUT_ID));
+    expect(screen.getByText(INVITE_CODE_REQUIRED_ERROR)).toBeDefined();
+    expect(screen.getByText(EMAIL_FORMAT_ERROR)).toBeDefined();
+    expect(screen.getByText(PASSWORD_TOO_SHORT_ERROR)).toBeDefined();
+    expect(screen.queryByLabelText(/^称呼/u)).toBeNull();
+  });
+});
+
+describe('(i) 步骤 2 主 CTA 禁用时显式列出缺失的必选项（禁用是契约，禁用原因有出口）', () => {
+  it('一项都没勾 ⇒ 原因行列出两项必选，主 CTA 仍 disabled', () => {
+    renderConsentStep();
+    const note = screen.getByTestId(MISSING_REQUIRED_TESTID);
+    expect(note.textContent).toContain(CONSENT_SCOPE_SPECS.basic_service.label);
+    expect(note.textContent).toContain(CONSENT_SCOPE_SPECS.sensitive_pi.label);
+    expect((screen.getByRole('button', { name: REGISTER_CTA }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it('只勾 basic_service ⇒ 原因行只列 sensitive_pi', () => {
+    renderConsentStep(setScope(INITIAL_CONSENT_SELECTION, 'basic_service', true));
+    const note = screen.getByTestId(MISSING_REQUIRED_TESTID);
+    expect(note.textContent).toContain(CONSENT_SCOPE_SPECS.sensitive_pi.label);
+    expect(note.textContent).not.toContain(CONSENT_SCOPE_SPECS.basic_service.label);
+  });
+
+  it('两项必选都勾上 ⇒ 原因行消失，主 CTA enabled', () => {
+    let selection = setScope(INITIAL_CONSENT_SELECTION, 'basic_service', true);
+    selection = setScope(selection, 'sensitive_pi', true);
+    renderConsentStep(selection);
+    expect(screen.queryByTestId(MISSING_REQUIRED_TESTID)).toBeNull();
+    expect((screen.getByRole('button', { name: REGISTER_CTA }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+
+  it('通过真实点击补齐两项后原因行消失（与主 CTA 的 enabled 同步）', () => {
+    renderConsentStep();
+    expect(screen.getByTestId(MISSING_REQUIRED_TESTID)).toBeDefined();
+    const boxes = screen.getAllByRole('checkbox');
+    fireEvent.click(boxes[CONSENS_INDEX.basic_service] as HTMLElement);
+    expect(screen.getByTestId(MISSING_REQUIRED_TESTID)).toBeDefined();
+    fireEvent.click(boxes[CONSENS_INDEX.sensitive_pi] as HTMLElement);
+    expect(screen.queryByTestId(MISSING_REQUIRED_TESTID)).toBeNull();
   });
 });

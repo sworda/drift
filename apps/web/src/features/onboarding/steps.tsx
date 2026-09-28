@@ -14,20 +14,33 @@
 // ⚠️ 当前步骤标题是全屏唯一的 Display 28px（UI-SPEC ## 视觉锚点契约 注册行）。
 // 页面里不得再出现第二个 28px 元素。
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
 
-import { type ConsentScope } from '@drift/contract';
+import { CONSENT_SCOPE_SPECS, type ConsentScope } from '@drift/contract';
 
 import { Button } from '@/components/ui/button';
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { API_ORIGIN, saveSessionToken } from '@/lib/session';
 
+import {
+  accountComplete,
+  accountFieldErrors,
+  BIRTH_DATE_INPUT_ID,
+  EMAIL_INPUT_ID,
+  firstInvalidAccountFieldId,
+  INITIAL_ACCOUNT,
+  INVITE_CODE_INPUT_ID,
+  NAME_INPUT_ID,
+  PASSWORD_INPUT_ID,
+  type AccountFields,
+} from './account-fields';
 import { AgeGate, isRejectedByAgeGate } from './age-gate';
 import { ConsentCheckboxes } from './consent-checkboxes';
 import {
   INITIAL_CONSENT_SELECTION,
+  missingRequiredScopes,
   requiredSatisfied,
   setScope,
   toRequestPayload,
@@ -44,6 +57,8 @@ import {
   REGISTER_DONE_TITLE,
   REGISTER_RETRY_LABEL,
   REGISTER_SUBMIT_ERROR,
+  MISSING_REQUIRED_CONSENT_NOTE,
+  MISSING_REQUIRED_PLACEHOLDER,
   STEP_TITLES,
 } from './copy';
 import {
@@ -59,21 +74,12 @@ export const STEP_TITLE_CLASS = 'text-[28px] leading-[1.2] font-semibold text-te
 
 export const SUBMIT_ERROR_TESTID = 'register-submit-error';
 
-export interface AccountFields {
-  readonly inviteCode: string;
-  readonly email: string;
-  readonly password: string;
-  readonly name: string;
-  readonly birthDate: string;
-}
+/** 主 CTA 禁用时那行「还差什么」的测试锚点。 */
+export const MISSING_REQUIRED_TESTID = 'register-missing-required';
 
-const INITIAL_ACCOUNT: AccountFields = Object.freeze({
-  inviteCode: '',
-  email: '',
-  password: '',
-  name: '',
-  birthDate: '',
-});
+// AccountFields / INITIAL_ACCOUNT 已移到 account-fields.ts，与字段判据同源；这里
+// re-export 类型，让既有消费方（register-render.test.tsx）的 import 路径不变。
+export type { AccountFields } from './account-fields';
 
 export interface RegisterRequest {
   readonly inviteCode: string;
@@ -133,6 +139,7 @@ export function OnboardingSteps({
     initialConsents ?? INITIAL_CONSENT_SELECTION,
   );
   const [showContactErrors, setShowContactErrors] = useState(false);
+  const [showAccountErrors, setShowAccountErrors] = useState(false);
   const [pending, setPending] = useState(false);
   const [submitFailed, setSubmitFailed] = useState(false);
   const [done, setDone] = useState(false);
@@ -145,24 +152,29 @@ export function OnboardingSteps({
     setConsents((current) => setScope(current, scope, value));
   }, []);
 
-  const accountComplete = useMemo(
-    () =>
-      account.inviteCode.trim().length > 0 &&
-      account.email.includes('@') &&
-      account.password.length >= 8 &&
-      account.name.trim().length > 0 &&
-      /^\d{4}-\d{2}-\d{2}$/.test(account.birthDate) &&
-      !rejected,
-    [account, rejected],
-  );
+  // 判据的唯一来源是 account-fields.ts 的规格表；这里只做调用。
+  const accountReady = accountComplete(account, now);
   const contactComplete = isEmergencyContactComplete(contact);
-  const canSubmit = accountComplete && contactComplete && requiredSatisfied(consents);
+  const canSubmit = accountReady && contactComplete && requiredSatisfied(consents);
+  // 主 CTA 禁用时那行「还差什么」的数据来源。
+  const missingRequired = missingRequiredScopes(consents);
+  // 只在校验尝试过之后才展示字段错误 —— 边打字边报错是在催促，不是在帮忙。
+  const accountErrors: Readonly<Record<string, string>> = showAccountErrors
+    ? accountFieldErrors(account, now)
+    : {};
+  const accountErrorFor = (id: string): string | undefined => accountErrors[id];
 
   const focusFirstInvalid = useCallback(() => {
     const id = firstInvalidContactFieldId(contact);
     if (id === null) return;
     formRef.current?.querySelector<HTMLInputElement>(`#${id}`)?.focus();
   }, [contact]);
+
+  const focusFirstInvalidAccount = useCallback(() => {
+    const id = firstInvalidAccountFieldId(account, now);
+    if (id === null) return;
+    formRef.current?.querySelector<HTMLInputElement>(`#${id}`)?.focus();
+  }, [account, now]);
 
   const onSubmit = useCallback(async () => {
     if (!canSubmit || pending) return;
@@ -234,12 +246,17 @@ export function OnboardingSteps({
       >
         {step === 0 ? (
           <div className="flex flex-col gap-4">
-            <Field>
-              <FieldLabel htmlFor="invite-code">{INVITE_CODE_LABEL}</FieldLabel>
+            <Field
+              data-invalid={
+                accountErrorFor(INVITE_CODE_INPUT_ID) !== undefined ? true : undefined
+              }
+            >
+              <FieldLabel htmlFor={INVITE_CODE_INPUT_ID}>{INVITE_CODE_LABEL}</FieldLabel>
               <Input
-                id="invite-code"
+                id={INVITE_CODE_INPUT_ID}
                 name="inviteCode"
                 value={account.inviteCode}
+                aria-invalid={accountErrorFor(INVITE_CODE_INPUT_ID) !== undefined}
                 onChange={(event) => {
                   setAccount((current) => ({ ...current, inviteCode: event.target.value }));
                 }}
@@ -247,41 +264,62 @@ export function OnboardingSteps({
               <FieldDescription className="text-[13px] text-text-secondary">
                 邀请码是一次性的，用过就不能再用。
               </FieldDescription>
+              {accountErrorFor(INVITE_CODE_INPUT_ID) !== undefined ? (
+                <FieldError>{accountErrorFor(INVITE_CODE_INPUT_ID)}</FieldError>
+              ) : null}
             </Field>
-            <Field>
-              <FieldLabel htmlFor="email">{EMAIL_LABEL}</FieldLabel>
+            <Field
+              data-invalid={accountErrorFor(EMAIL_INPUT_ID) !== undefined ? true : undefined}
+            >
+              <FieldLabel htmlFor={EMAIL_INPUT_ID}>{EMAIL_LABEL}</FieldLabel>
               <Input
-                id="email"
+                id={EMAIL_INPUT_ID}
                 name="email"
                 type="email"
                 value={account.email}
+                aria-invalid={accountErrorFor(EMAIL_INPUT_ID) !== undefined}
                 onChange={(event) => {
                   setAccount((current) => ({ ...current, email: event.target.value }));
                 }}
               />
+              {accountErrorFor(EMAIL_INPUT_ID) !== undefined ? (
+                <FieldError>{accountErrorFor(EMAIL_INPUT_ID)}</FieldError>
+              ) : null}
             </Field>
-            <Field>
-              <FieldLabel htmlFor="password">{PASSWORD_LABEL}</FieldLabel>
+            <Field
+              data-invalid={accountErrorFor(PASSWORD_INPUT_ID) !== undefined ? true : undefined}
+            >
+              <FieldLabel htmlFor={PASSWORD_INPUT_ID}>{PASSWORD_LABEL}</FieldLabel>
               <Input
-                id="password"
+                id={PASSWORD_INPUT_ID}
                 name="password"
                 type="password"
                 value={account.password}
+                aria-invalid={accountErrorFor(PASSWORD_INPUT_ID) !== undefined}
                 onChange={(event) => {
                   setAccount((current) => ({ ...current, password: event.target.value }));
                 }}
               />
+              {accountErrorFor(PASSWORD_INPUT_ID) !== undefined ? (
+                <FieldError>{accountErrorFor(PASSWORD_INPUT_ID)}</FieldError>
+              ) : null}
             </Field>
-            <Field>
-              <FieldLabel htmlFor="display-name">{NAME_LABEL}</FieldLabel>
+            <Field
+              data-invalid={accountErrorFor(NAME_INPUT_ID) !== undefined ? true : undefined}
+            >
+              <FieldLabel htmlFor={NAME_INPUT_ID}>{NAME_LABEL}</FieldLabel>
               <Input
-                id="display-name"
+                id={NAME_INPUT_ID}
                 name="name"
                 value={account.name}
+                aria-invalid={accountErrorFor(NAME_INPUT_ID) !== undefined}
                 onChange={(event) => {
                   setAccount((current) => ({ ...current, name: event.target.value }));
                 }}
               />
+              {accountErrorFor(NAME_INPUT_ID) !== undefined ? (
+                <FieldError>{accountErrorFor(NAME_INPUT_ID)}</FieldError>
+              ) : null}
             </Field>
             <AgeGate
               birthDate={account.birthDate}
@@ -290,6 +328,9 @@ export function OnboardingSteps({
                 setAccount((current) => ({ ...current, birthDate }));
               }}
             />
+            {accountErrorFor(BIRTH_DATE_INPUT_ID) !== undefined ? (
+              <FieldError>{accountErrorFor(BIRTH_DATE_INPUT_ID)}</FieldError>
+            ) : null}
           </div>
         ) : null}
 
@@ -303,6 +344,17 @@ export function OnboardingSteps({
 
         {step === 2 ? (
           <ConsentCheckboxes selection={consents} onToggle={toggleConsent} disabled={pending} />
+        ) : null}
+
+        {/* 主 CTA 的禁用是契约强制的（UI-SPEC 401/479），所以「还差什么」必须显式说出
+            来，否则 389 那条「禁止只描述问题」在结构上无法被满足。两项必选都勾上后消失。 */}
+        {step === 2 && missingRequired.length > 0 ? (
+          <p data-testid={MISSING_REQUIRED_TESTID} className="text-[13px] text-text-secondary">
+            {MISSING_REQUIRED_CONSENT_NOTE.replace(
+              MISSING_REQUIRED_PLACEHOLDER,
+              missingRequired.map((scope) => CONSENT_SCOPE_SPECS[scope].label).join('、'),
+            )}
+          </p>
         ) : null}
 
         {submitFailed ? (
@@ -332,30 +384,44 @@ export function OnboardingSteps({
             </Button>
           ) : null}
           {step < 2 ? (
-            // ⚠️ 紧急联系人那一步的「下一步」**不禁用**，这是刻意的：UI-SPEC 为这一步
-            // 定了一条专门的错误文案（「这个联系方式我们没法识别，请填写 11 位手机号……」）
-            // 并要求把焦点移到第一个出错字段。如果按钮在格式不通过时是 disabled，那条
-            // 文案与那次焦点移动**永远不可达** —— 一条到不了的法定告知比一个多余的禁用态
-            // 更糟。第一步仍然禁用：它没有对应的错误文案，空字段本身就是可见的。
+            // ⚠️ 两个翻页「下一步」都**不禁用**，这是刻意的。
             //
-            // 「未完成不得提交」这条契约指的是**主 CTA**（下面那个，由两项必选同意把关），
-            // 不是每个中间步骤的翻页按钮。
+            // 紧急联系人那一步：UI-SPEC 为它定了一条专门的错误文案（「这个联系方式我们
+            // 没法识别，请填写 11 位手机号……」）并要求把焦点移到第一个出错字段。如果
+            // 按钮在格式不通过时是 disabled，那条文案与那次焦点移动**永远不可达** ——
+            // 一条到不了的法定告知比一个多余的禁用态更糟。
+            //
+            // 步骤 0 有完全相同的可达性问题，而它的禁用从来不是 UI-SPEC 强制的 ——
+            // 401/479 说的都是**主 CTA**，不是翻页按钮。之前它 disabled 的代价是一个
+            // 死结：密码短于 8 位 / 出生日期没填成完整日期的用户「看起来全填了」，按钮
+            // 却点不动且零解释。现在改为：点得动，点下去如不完整则渲染字段级错误行并把
+            // 焦点移到第一个出错字段，且**不前进**。
             <Button
               type="button"
-              disabled={step === 0 ? !accountComplete : false}
               onClick={() => {
-                if (step === 1 && !contactComplete) {
+                if (step === 0) {
+                  if (!accountReady) {
+                    setShowAccountErrors(true);
+                    focusFirstInvalidAccount();
+                    return;
+                  }
+                  setStep(1);
+                  return;
+                }
+                // step === 1
+                if (!contactComplete) {
                   setShowContactErrors(true);
                   focusFirstInvalid();
                   return;
                 }
-                setStep((current) => (current === 2 ? 2 : ((current + 1) as 1 | 2)));
+                setStep(2);
               }}
             >
               {NEXT_STEP_LABEL}
             </Button>
           ) : (
-            // 主 CTA：两项必选未全勾时 **disabled**，不是提交后报错。
+            // 主 CTA：两项必选未全勾时 **disabled**，不是提交后报错（UI-SPEC 401/479）。
+            // 禁用原因由上面那行「还差必选同意项：…」显式说出。
             <Button type="submit" disabled={!canSubmit || pending} aria-busy={pending}>
               {REGISTER_CTA}
             </Button>
