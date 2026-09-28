@@ -8,11 +8,27 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ExportPanel } from '@/features/privacy/export-panel';
+import { saveSessionToken } from '@/lib/session';
+
+const ORIGINAL_CREATE_OBJECT_URL = URL.createObjectURL;
+const ORIGINAL_REVOKE_OBJECT_URL = URL.revokeObjectURL;
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  // URL 的静态方法不是 spy 能自动还原的对象属性，逐个还原。
+  Object.defineProperty(URL, 'createObjectURL', {
+    value: ORIGINAL_CREATE_OBJECT_URL,
+    configurable: true,
+    writable: true,
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    value: ORIGINAL_REVOKE_OBJECT_URL,
+    configurable: true,
+    writable: true,
+  });
 });
 
 function stubFetch(handler: (input: RequestInfo | URL) => Promise<Response>): typeof fetch {
@@ -23,6 +39,33 @@ function stubFetch(handler: (input: RequestInfo | URL) => Promise<Response>): ty
 
 const json = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+type FetchCall = readonly [input: RequestInfo | URL, init: RequestInit | undefined];
+
+/** 记录 init 的 fetch stub —— 下载用例要断言 Authorization 头确实附着在下载请求上。 */
+function stubFetchWithInit(
+  handler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+): { readonly calls: FetchCall[] } {
+  const calls: FetchCall[] = [];
+  const impl = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    calls.push([input, init]);
+    return handler(input, init);
+  });
+  vi.stubGlobal('fetch', impl);
+  return { calls };
+}
+
+/** 把 URL 的两个静态方法换成可观测的 stub（jsdom 是否原生实现不依赖）。 */
+function stubObjectUrl(): {
+  readonly create: ReturnType<typeof vi.fn>;
+  readonly revoke: ReturnType<typeof vi.fn>;
+} {
+  const create = vi.fn(() => 'blob:mock');
+  const revoke = vi.fn();
+  Object.defineProperty(URL, 'createObjectURL', { value: create, configurable: true, writable: true });
+  Object.defineProperty(URL, 'revokeObjectURL', { value: revoke, configurable: true, writable: true });
+  return { create, revoke };
+}
 
 async function clickCta(): Promise<void> {
   fireEvent.click(screen.getByTestId('export-cta'));
@@ -74,7 +117,7 @@ describe('ExportPanel 的状态覆盖（E9）', () => {
     expect(screen.queryByTestId('export-cta')).toBeNull();
   });
 
-  it('complete：两个格式各一个下载链接（绑定 :exportId）', async () => {
+  it('complete：两个格式各一个下载按钮，文案逐字保持「下载 .md」「下载 .json」，且不再有任何指向 API 的 <a> 链接', async () => {
     stubFetch(async (input) => {
       const url = String(input);
       if (url.endsWith('/me/export')) return json(202, { exportId: 'exp-1' });
@@ -85,10 +128,67 @@ describe('ExportPanel 的状态覆盖（E9）', () => {
     await waitFor(() => {
       expect(screen.getByTestId('export-done')).toBeTruthy();
     });
-    const links = screen.getAllByRole('link');
-    expect(links.map((node) => (node as HTMLAnchorElement).href)).toEqual([
-      expect.stringContaining('/me/export/exp-1/download?format=md'),
-      expect.stringContaining('/me/export/exp-1/download?format=json'),
-    ]);
+    expect(screen.getByTestId('export-download-md').textContent).toBe('下载 .md');
+    expect(screen.getByTestId('export-download-json').textContent).toBe('下载 .json');
+    // 结构性：<a href> 无法携带 Authorization —— 下载入口不得再是链接。
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('complete → 点击下载：走 authedFetch（附 Bearer 头）→ Blob → 触发本地保存', async () => {
+    saveSessionToken('tok-123');
+    const { calls } = stubFetchWithInit(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/me/export')) return json(202, { exportId: 'exp-1' });
+      if (url.includes('/download')) return new Response('本文件全部角色消息由 AI 生成', { status: 200 });
+      return json(200, { status: 'complete' });
+    });
+    const { create, revoke } = stubObjectUrl();
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+
+    render(<ExportPanel />);
+    await clickCta();
+    await waitFor(() => {
+      expect(screen.getByTestId('export-done')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('export-download-md'));
+    await waitFor(() => {
+      expect(create).toHaveBeenCalledTimes(1);
+    });
+
+    const downloadCall = calls.find((call) => String(call[0]).includes('/download'));
+    expect(downloadCall).toBeTruthy();
+    expect(String(downloadCall?.[0])).toContain('/me/export/exp-1/download?format=md');
+    // 关键断言：下载请求确实带了 Bearer —— 这正是缺陷修复的核心。
+    expect(new Headers(downloadCall?.[1]?.headers).get('authorization')).toBe('Bearer tok-123');
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('complete → 下载失败（文件已被 TTL 清理 / 401）：落到既有失败态，不静默', async () => {
+    saveSessionToken('tok-123');
+    stubFetchWithInit(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/me/export')) return json(202, { exportId: 'exp-1' });
+      if (url.includes('/download')) return json(401, { error: 'unauthorized' });
+      return json(200, { status: 'complete' });
+    });
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+
+    render(<ExportPanel />);
+    await clickCta();
+    await waitFor(() => {
+      expect(screen.getByTestId('export-done')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('export-download-md'));
+    await waitFor(() => {
+      expect(screen.getByTestId('export-failed')).toBeTruthy();
+    });
+    expect(screen.getByRole('alert').textContent).toContain('导出没有完成');
+    expect(click).not.toHaveBeenCalled();
   });
 });

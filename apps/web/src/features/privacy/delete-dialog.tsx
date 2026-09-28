@@ -21,13 +21,13 @@ import { ACCOUNT_DELETION_CONFIRMATION_PHRASE } from '@drift/contract';
 
 import { Progress } from '@/components/ui/progress';
 
+import { API_ORIGIN, authedFetch } from '@/lib/session';
+
 import {
   DELETE_CONFIRM_COPY,
   DELETE_RUNNING_COPY,
   DELETE_RUNNING_NOTE,
 } from './copy';
-
-const API_ORIGIN = process.env['NEXT_PUBLIC_API_ORIGIN'] ?? 'http://127.0.0.1:3001';
 
 /** 轮询间隔。500ms 对一次几十毫秒的作业足够密，对 DB 也足够轻。 */
 const POLL_INTERVAL_MS = 500;
@@ -71,9 +71,7 @@ export function DeleteDialog({ onComplete }: DeleteDialogProps) {
   async function pollUntilDone(actionId: string, receiptToken: string): Promise<void> {
     for (let round = 0; round < POLL_MAX_ROUNDS; round += 1) {
       if (cancelledRef.current) return;
-      const meResponse = await fetch(`${API_ORIGIN}/me/privacy-actions/${actionId}`, {
-        credentials: 'include',
-      }).catch(() => null);
+      const meResponse = await authedFetch(`/me/privacy-actions/${actionId}`).catch(() => null);
       if (meResponse !== null && meResponse.status === 200) {
         // 作业在 session 失效前的一瞬完成（竞争窗口内拿到终态）。
         break;
@@ -101,9 +99,8 @@ export function DeleteDialog({ onComplete }: DeleteDialogProps) {
   }
 
   async function startDeletion(): Promise<void> {
-    const response = await fetch(`${API_ORIGIN}/me/delete`, {
+    const response = await authedFetch('/me/delete', {
       method: 'POST',
-      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ confirmationPhrase: ACCOUNT_DELETION_CONFIRMATION_PHRASE }),
     }).catch(() => null);

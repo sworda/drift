@@ -16,9 +16,9 @@ import { Button } from '@/components/ui/button';
 import { EmptyOrError } from '@/components/empty-or-error';
 import { Progress } from '@/components/ui/progress';
 
-import { EXPORT_CTA, EXPORT_FAILED_COPY, EXPORT_PACKING_COPY, EXPORT_SLOW_NOTE } from './copy';
+import { authedFetch } from '@/lib/session';
 
-const API_ORIGIN = process.env['NEXT_PUBLIC_API_ORIGIN'] ?? 'http://127.0.0.1:3001';
+import { EXPORT_CTA, EXPORT_FAILED_COPY, EXPORT_PACKING_COPY, EXPORT_SLOW_NOTE } from './copy';
 
 const POLL_INTERVAL_MS = 500;
 const SLOW_NOTE_AFTER_MS = 10_000;
@@ -38,6 +38,35 @@ export function ExportPanel({ deletedAt }: ExportPanelProps) {
   const [phase, setPhase] = useState<ExportPhase>({ kind: 'idle' });
   const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * 带身份取字节 → Blob → 触发下载。
+   *
+   * `<a href={`${API_ORIGIN}/me/export/.../download`}>` 结构性**无法**携带
+   * Authorization 头（浏览器导航不经过 fetch，不会带上 localStorage 里的 token），
+   * 而 /me/export/:id/download 走 currentUserId(c) —— 无 Bearer 即 401。所以下载
+   * 必须先走一次真正的带身份请求拿到字节，再用 Blob 触发本地保存。
+   *
+   * 失败（导出文件已被 7 天 TTL 清理 / 401）不静默：复用本面板既有的失败态，
+   * 不新编文案。
+   */
+  async function downloadExport(exportId: string, format: 'md' | 'json'): Promise<void> {
+    try {
+      const response = await authedFetch(`/me/export/${exportId}/download?format=${format}`);
+      if (!response.ok) throw new Error(`download returned ${String(response.status)}`);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `drift-export-${exportId}.${format}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      setPhase({ kind: 'failed' });
+    }
+  }
+
   useEffect(() => {
     return () => {
       if (slowTimer.current !== null) clearTimeout(slowTimer.current);
@@ -46,9 +75,7 @@ export function ExportPanel({ deletedAt }: ExportPanelProps) {
 
   async function pollUntilDone(exportId: string): Promise<void> {
     for (let round = 0; round < 240; round += 1) {
-      const response = await fetch(`${API_ORIGIN}/me/export/${exportId}`, {
-        credentials: 'include',
-      }).catch(() => null);
+      const response = await authedFetch(`/me/export/${exportId}`).catch(() => null);
       if (response !== null && response.status === 200) {
         const payload = (await response.json()) as { readonly status?: string };
         if (payload.status === 'complete') {
@@ -66,9 +93,8 @@ export function ExportPanel({ deletedAt }: ExportPanelProps) {
   }
 
   async function startExport(): Promise<void> {
-    const response = await fetch(`${API_ORIGIN}/me/export`, {
+    const response = await authedFetch('/me/export', {
       method: 'POST',
-      credentials: 'include',
     }).catch(() => null);
     if (response === null || response.status !== 202) {
       setPhase({ kind: 'failed' });
@@ -131,18 +157,22 @@ export function ExportPanel({ deletedAt }: ExportPanelProps) {
         <div className="mt-md" data-testid="export-done">
           <p className="text-label leading-relaxed text-text-secondary">打包完成，七天有效。选择格式下载：</p>
           <div className="mt-sm flex gap-sm">
-            <a
-              className="h-9 rounded-lg border border-border px-md text-label leading-9 text-text-primary hover:bg-muted"
-              href={`${API_ORIGIN}/me/export/${phase.exportId}/download?format=md`}
+            <Button
+              variant="outline"
+              size="lg"
+              data-testid="export-download-md"
+              onClick={() => void downloadExport(phase.exportId, 'md')}
             >
               下载 .md
-            </a>
-            <a
-              className="h-9 rounded-lg border border-border px-md text-label leading-9 text-text-primary hover:bg-muted"
-              href={`${API_ORIGIN}/me/export/${phase.exportId}/download?format=json`}
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              data-testid="export-download-json"
+              onClick={() => void downloadExport(phase.exportId, 'json')}
             >
               下载 .json
-            </a>
+            </Button>
           </div>
         </div>
       ) : null}

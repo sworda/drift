@@ -15,6 +15,8 @@ import type { CollectedView } from '@drift/db/inventory';
 
 import { Button } from '@/components/ui/button';
 
+import { authedFetch } from '@/lib/session';
+
 import { CollectedList } from '@/features/privacy/collected-list';
 import { DeleteDialog } from '@/features/privacy/delete-dialog';
 import { ExportPanel } from '@/features/privacy/export-panel';
@@ -30,15 +32,17 @@ import {
   TAB_EXPORT,
 } from '@/features/privacy/copy';
 
-const API_ORIGIN = process.env['NEXT_PUBLIC_API_ORIGIN'] ?? 'http://127.0.0.1:3001';
-
 type LoadState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error' }
   | { readonly kind: 'ok'; readonly view: CollectedView; readonly consents: readonly ConsentSwitchItem[] };
 
+// 身份只来自 Authorization: Bearer（apps/api/src/modules/auth/session.ts）—— `/me/*`
+// 与 `/me/consents/*` 都走 currentUserId()，无 Bearer 即 401。所以这里的每一次请求
+// 都必须由 authedFetch 附头；裸 fetch + credentials:'include' 在浏览器里拿到的是
+// 一整片 401（「以为 cookie 能鉴权」的形态，由 tools/ci/client-auth-fetch.test.ts 禁掉）。
 async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_ORIGIN}${path}`, { credentials: 'include', cache: 'no-store' });
+  const response = await authedFetch(path, { cache: 'no-store' });
   if (!response.ok) throw new Error(`${path} returned ${String(response.status)}`);
   return (await response.json()) as T;
 }
@@ -66,9 +70,8 @@ export default function PrivacyPage() {
 
   const revoke = useCallback(
     async (scope: ConsentScope, confirmationPhrase?: string): Promise<void> => {
-      const response = await fetch(`${API_ORIGIN}/me/consents/${scope}/revoke`, {
+      const response = await authedFetch(`/me/consents/${scope}/revoke`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(confirmationPhrase === undefined ? {} : { confirmationPhrase }),
       });
