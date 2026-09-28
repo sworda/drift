@@ -109,13 +109,24 @@ export const ALERT_TIMEOUT_MS = 10_000;
 export const MIN_LEAK_LENGTH = 6;
 
 export class AlertPayloadLeakError extends Error {
-  constructor(
-    /** 泄漏的子串。**只进异常对象，不进日志** —— 它就是用户原文的一个片段。 */
-    readonly leaked: string,
-  ) {
+  /**
+   * 泄漏的子串。**只进异常对象，不进日志** —— 它就是用户原文的一个片段。
+   *
+   * ⚠️ 这里是「显式字段 + 构造器赋值」，**不是** `constructor(readonly leaked: string)`。
+   * 参数属性需要**代码生成**（生成 `this.leaked = leaked`），而 Node 的原生 TS 支持是
+   * **纯类型擦除**（strip-only）：遇到参数属性直接抛
+   * `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`。apps/api 的启动命令是裸 `node src/index.ts`
+   * （零转换标志，见 apps/api/Dockerfile 与 package.json 的 start），而本模块在入口
+   * 的 import 图里 —— 参数属性会让 API 容器**启动即崩**（2026-09-28 实际发生过）。
+   * tools/ci/strip-only-syntax.test.ts 钉住这一整类语法，别再写回去。
+   */
+  readonly leaked: string;
+
+  constructor(leaked: string) {
     super(
       `acute 告警载荷里出现了触发消息的片段（${String(leaked.length)} 字）。告警不得携带任何对话内容（SAFE-16 / PRIV-11）。`,
     );
+    this.leaked = leaked;
     this.name = 'AlertPayloadLeakError';
   }
 }
