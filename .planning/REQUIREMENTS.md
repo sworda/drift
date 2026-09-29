@@ -319,7 +319,7 @@
 | COMPLY-08 | Phase 1 | Complete |
 | COMPLY-09 | Phase 1 | Complete |
 | COMPLY-10 | Phase 1 | Complete |
-| COMPLY-11 | Phase 1 | Pending |
+| COMPLY-11 | Phase 1 | Complete |
 | SAFE-01 | Phase 1 | Complete |
 | SAFE-02 | Phase 1 | Complete |
 | SAFE-03 | Phase 1 | Complete |
@@ -339,11 +339,11 @@
 | PRIV-01 | Phase 1 | Complete |
 | PRIV-02 | Phase 1 | Complete |
 | PRIV-03 | Phase 1 | Complete |
-| PRIV-04 | Phase 1 | Pending |
-| PRIV-05 | Phase 1 | Pending |
+| PRIV-04 | Phase 1 | Complete |
+| PRIV-05 | Phase 1 | Complete |
 | PRIV-06 | Phase 1 | Complete |
 | PRIV-07 | Phase 1 | Complete |
-| PRIV-08 | Phase 1 | Pending |
+| PRIV-08 | Phase 1 | Complete |
 | PRIV-09 | Phase 1 | Complete |
 | PRIV-10 | Phase 1 | Complete |
 | PRIV-11 | Phase 1 | Complete |
