@@ -70,6 +70,13 @@ generated: 2026-09-29
 - CI：fast（GitHub 托管、零境内依赖）与 integration（self-hosted、无放行构造字面扫描）分层成立
 - eslint.config.js：REQUIRED_RESTRICTED_SYNTAX 替换非合并陷阱有 meta 测试盯着；ws/decryptContact/provider SDK 三条导入边界的作用域组装正确
 
+## 修复状态
+
+| # | 状态 | commit | 说明 |
+|---|------|--------|------|
+| 1 | ✅ 已修复 | 2318e90 | WS 握手鉴权：`?token=` → resolveSession → `conversation.userId === session.userId`，不匹配 4400 'unauthorized'（不区分失败原因，T-09-06）；DB 故障 fail-closed。浏览器侧 chat-socket 同步带 token。新增 tests/integration/ws-auth.test.ts：无 token 0 帧、无归属 0 帧（均 4400 同因）、合法连接照常收到 message.created；不存在会话同样 4400。 |
+| 2 | ✅ 已修复（恒时比较 + query 日志） | 1070978 | delete-routes 的回执 token 比对改 node:crypto timingSafeEqual（固定长度 UUID，长度短路不构成旁路）；Caddyfile log 改 format filter，query 的 token / conversationId 键在落日志前删除（脱敏 URI），注释补上「不含个人信息」的成立条件。已实测：带 ?token=&conversationId= 的请求落日志后 uri 只剩非敏感参数。 |
+
 ## 结论
 
-Phase 1 的结构性契约（网关、注册表、fail-closed、去标识化、双处执行点）实现质量显著高于平均水平，且大量断言配有负向 fixture 证明非空真。Finding #1（WS 无鉴权）建议在进入 Phase 2 前修复——它不是「后续阶段的质量项」，而是当前部署形态下敏感个人信息的未授权访问路径；其余按优先级排入后续批次即可。
+Phase 1 的结构性契约（网关、注册表、fail-closed、去标识化、双处执行点）实现质量显著高于平均水平，且大量断言配有负向 fixture 证明非空真。Finding #1（WS 无鉴权）已于进入 Phase 2 前修复（2318e90）；其余按优先级排入后续批次即可。
