@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: 合规安全地基 + 会话骨架
 status: executing
-stopped_at: Completed 01-12-PLAN.md
-last_updated: "2026-09-27T17:57:17.222Z"
+stopped_at: Completed 01-14-PLAN.md (Phase 01 全部 15 个 plan 完成，待阶段验证)
+last_updated: "2026-09-29T11:30:04.416Z"
 last_activity: 2026-09-26
 last_activity_desc: Phase 01 execution started
-state_head: 0c8cd8590a45c5dd9f0999bab7487a2b5babcbee
+state_head: eef6dff06111b4da685a6306aaaf43071aeb28ed
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 15
   percent: 0
 ---
 
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 
 ## Current Position
 
-Phase: 01 (合规安全地基 + 会话骨架) — EXECUTING
-Plan: 13 of 15
-Status: Ready to execute
+Phase: 01 (合规安全地基 + 会话骨架) — 全部 15 个 plan 已完成，待阶段验证
+Plan: 15 of 15
+Status: Phase execution complete
 Last activity: 2026-09-26 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -73,6 +73,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P11 | 2h 30m | 3 tasks | 39 files |
 | Phase 01 P10 | 1h 35m | 3 tasks | 21 files |
 | Phase 01 P12 | 55 min | 3 tasks | 30 files |
+| Phase 01 P14 | 40h | 4 tasks | 78 files |
 
 ## Accumulated Context
 
@@ -138,6 +139,8 @@ Progress: [░░░░░░░░░░] 0%
   - "导出管道的 GatedText 接缝：gatedFromStoredCharacterMessage（disclosure 留证 → 恢复，不产生）是全仓第二处受控 as GatedText，egress-registry 的断言修订为「恰好两处」—— 强度不变，任何第三处仍然红"
   - "retention-cleanup 的清理规则由 DATA_INVENTORY 的 retention 字段派生（buildRetentionRules 纯函数），源码无第二份期限清单；导出文件 7 天 TTL 委托给 export-artifact-gc（cron 0 5 * * *），retention-cleanup 错峰 45 18 * * *（均为 UTC）"
 - [Phase 01]: Plan 12：计时/依赖/退出三个合规机制落地 —— usage_segment 按 user_id 归集 + pg-boss 到点作业（COMPLY-03）；三阈值纯函数 + 日扫 + 72h 去重（COMPLY-04）；两档整句锚定退出过滤器 + 零出站在网关/worker/落库事务三处执行（COMPLY-05） — rule_id 用 DB CHECK 的取值域而非 PLAN 字面（写 PLAN 的值插不进 dependency_signal）；网关 conversationStatus 改 readConversationStatus 端口（状态在网关内部最后一刻读，调用方传不了过期值）；Phase 1 无会话级延迟投递队列，取消做成必填端口 + 注册表（Phase 2 接入不改 executeHardExit），零出站由 worker 事务内重读兜底
+- [Phase 01]: Plan 14：断连补拉在 v1 是原子的（补完才渲染），不区分已补齐与仍缺失区段 —— UI-SPEC unresolved 项按该假设实现，若改流式补拉需回 UI-SPEC 补一行；浏览器会话载体（chat-client/chat-socket/session）是本 plan 的实质新增（handoff #75 的接线义务），Plan 12 三个合规 Dialog 至此真正接上 WS 事件 — 走查由产品开发者本人执行（边走边修），不是 ROADMAP 字面要求的首次使用者 —— 缺陷发现与修复真实（10 个修复 commit 留证）但「独立完成、无需解释」未经无偏样本验证；已写入 01-PLAYTEST.md 诚实性备注，阶段验证并入 D13 复核，公开上线前补走一轮。桌面侧栏（≥1024px）以两档断点缓解并登记 todos/pending，侧栏落地后须删两档断点（UI-SPEC:52 走查修正登记的耦合）
+- [Phase 01]: Plan 14：/telemetry/error 白名单端点（zod 严格 schema 拒绝未知字段 + componentStack 中文句子剥离 + 写入行不含正文 6 字子串断言）与全局 error boundary 落地；NEXT_PUBLIC_API_ORIGIN 改为构建期注入（web Dockerfile ARG）—— 运行时 env 对 Next 客户端 bundle 不可见是注册提交打错地址的根因 — Plan 14：/telemetry/error 白名单端点（zod 严格 schema 拒绝未知字段 + componentStack 中文句子剥离 + 写入行不含正文 6 字子串断言）与全局 error boundary 落地；NEXT_PUBLIC_API_ORIGIN 改为构建期注入（web Dockerfile ARG）—— 运行时 env 对 Next 客户端 bundle 不可见是注册提交打错地址的根因
 
 ### Pending Todos
 
@@ -162,6 +165,6 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-Last session: 2026-09-27T17:57:03.143Z
-Stopped at: Completed 01-12-PLAN.md
+Last session: 2026-09-29T11:28:11.071Z
+Stopped at: Completed 01-14-PLAN.md (Phase 01 全部 15 个 plan 完成，待阶段验证)
 Resume file: None

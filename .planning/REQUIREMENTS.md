@@ -21,14 +21,14 @@
 
 第一顺位法规为《人工智能拟人化互动服务管理暂行办法》（五部门令第21号，2026-07-15 施行）。
 
-- [ ] **COMPLY-01**: 用户在会话列表、聊天界面、角色详情页任一位置都能看到对方是 AI 的持续性标识（不是仅首次弹窗）〔第十八条第一款〕
+- [x] **COMPLY-01**: 用户在会话列表、聊天界面、角色详情页任一位置都能看到对方是 AI 的持续性标识（不是仅首次弹窗）〔第十八条第一款〕
 - [x] **COMPLY-02**: 用户导出的聊天记录文件内含 AI 生成内容标识，不因导出而丢失〔《标识办法》第四条〕
 - [x] **COMPLY-03**: 用户连续使用每超过 2 小时收到一次使用时长提醒，该计时跨页面刷新与重新登录仍然有效〔第十八条第二款〕
 - [x] **COMPLY-04**: 系统识别到用户出现过度依赖或沉迷倾向时，以弹窗等显著方式动态提醒互动内容由 AI 生成〔第十八条第二款〕
 - [x] **COMPLY-05**: 用户通过窗口操作或输入退出关键词要求退出时，服务立即停止，且不触发任何挽留话术或后续主动消息〔第十九条〕
 - [x] **COMPLY-06**: 用户注册时须提供年龄，以及监护人或紧急联系人之一〔第十二条〕
 - [x] **COMPLY-07**: 用户注册时须确认已满 18 周岁，未满 18 周岁无法进入角色聊天〔v1 的选择，用于规避未成年人义务集〕
-- [ ] **COMPLY-08**: 系统不提供模拟用户现实亲属或特定真人的角色类型，用户自建角色时该类描述被拒绝〔第十五条〕
+- [x] **COMPLY-08**: 系统不提供模拟用户现实亲属或特定真人的角色类型，用户自建角色时该类描述被拒绝〔第十五条〕
 - [x] **COMPLY-09**: AI 生成内容标识由消息管道中间件统一注入，而非由各 UI 组件各自实现〔架构约束，防止新增出口遗漏标识〕
 - [x] **COMPLY-10**: 系统维护一个显式可审计的「公开性」状态（是否有公开注册入口 / 是否上架 / 注册用户数 / 是否商业化），任一项变化时阻断发布并输出合规 checklist〔第二条适用范围抗辩，Low-Medium〕
 - [x] **COMPLY-11**: 所有对外提供的无显式标识内容（若有）留存提供对象日志不少于 6 个月〔《标识办法》第九条〕
@@ -68,13 +68,13 @@
 
 ### 聊天基础体验 (CHAT)
 
-- [ ] **CHAT-01**: 用户可浏览预设角色库并查看角色简介
+- [x] **CHAT-01**: 用户可浏览预设角色库并查看角色简介
 - [x] **CHAT-02**: 用户可添加一个角色为好友，关系从「陌生人」开始
 - [x] **CHAT-03**: 用户可在类微信的界面中与角色进行文字往返对话
-- [ ] **CHAT-04**: 用户可在消息中发送表情
-- [ ] **CHAT-05**: 用户可在会话列表看到全部会话及未读数
-- [ ] **CHAT-06**: 用户离线期间角色发送的消息，在用户回来时以未读形式完整呈现
-- [ ] **CHAT-07**: 消息先落库取得 seq 再经 WebSocket 投递，客户端重连后按游标补拉不丢消息
+- [x] **CHAT-04**: 用户可在消息中发送表情
+- [x] **CHAT-05**: 用户可在会话列表看到全部会话及未读数
+- [x] **CHAT-06**: 用户离线期间角色发送的消息，在用户回来时以未读形式完整呈现
+- [x] **CHAT-07**: 消息先落库取得 seq 再经 WebSocket 投递，客户端重连后按游标补拉不丢消息
 - [ ] **CHAT-08**: 用户可创建自定义角色（描述 → 生成人格），受 COMPLY-08 约束
 
 ### 对话真实感 (REAL)
@@ -174,7 +174,7 @@
 
 以下三条虽属 M2 类别，但**必须在 M1 完成** —— 事后补建的代价不可接受：
 
-- [ ] **IFC-08**（数据模型预留）—— 事后无法为历史消息补溯源
+- [x] **IFC-08**（数据模型预留）—— 事后无法为历史消息补溯源
 - [x] **RES-02**（L0 绝不存原文嵌入）—— 一旦存入，研究库的复制已成既成事实，事后删除无法撤销
 - [x] **RES-03**（publication 向量列 CI 断言）—— 与 RES-02 配套，必须在第一次复制发生前生效
 
@@ -202,7 +202,7 @@
 - [ ] **IFC-05**: 命中 `hard_locked` 或 `pii_flags` 时人格无权参与决策，结果标记为 `blocked_by_ifc`〔断言〕
 - [ ] **IFC-06**: 每次披露决策留痕，用户可查询「它为什么说了这个」
 - [ ] **IFC-07**: 记忆的「要点漂移」失真**禁止跨用户污染**
-- [ ] **IFC-08**: OQ3 所需的六项数据模型在 v1 全量预留：`info_item` provenance、能力票据的 `other_character` 枚举、`character_relationship`、`memory.source_kind='relayed'`、audience 概念、事件总线 topic 命名空间
+- [x] **IFC-08**: OQ3 所需的六项数据模型在 v1 全量预留：`info_item` provenance、能力票据的 `other_character` 枚举、`character_relationship`、`memory.source_kind='relayed'`、audience 概念、事件总线 topic 命名空间
 
 ### 研究管道 (RES)
 
@@ -309,14 +309,14 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COMPLY-01 | Phase 1 | Pending |
-| COMPLY-02 | Phase 1 | Pending |
+| COMPLY-01 | Phase 1 | Complete |
+| COMPLY-02 | Phase 1 | Complete |
 | COMPLY-03 | Phase 1 | Complete |
 | COMPLY-04 | Phase 1 | Complete |
 | COMPLY-05 | Phase 1 | Complete |
 | COMPLY-06 | Phase 1 | Complete |
 | COMPLY-07 | Phase 1 | Complete |
-| COMPLY-08 | Phase 1 | Pending |
+| COMPLY-08 | Phase 1 | Complete |
 | COMPLY-09 | Phase 1 | Complete |
 | COMPLY-10 | Phase 1 | Complete |
 | COMPLY-11 | Phase 1 | Pending |
@@ -347,13 +347,13 @@
 | PRIV-09 | Phase 1 | Complete |
 | PRIV-10 | Phase 1 | Complete |
 | PRIV-11 | Phase 1 | Complete |
-| CHAT-01 | Phase 1 | Pending |
+| CHAT-01 | Phase 1 | Complete |
 | CHAT-02 | Phase 1 | Complete |
 | CHAT-03 | Phase 1 | Complete |
-| CHAT-04 | Phase 1 | Pending |
-| CHAT-05 | Phase 1 | Pending |
-| CHAT-06 | Phase 1 | Pending |
-| CHAT-07 | Phase 1 | Pending |
+| CHAT-04 | Phase 1 | Complete |
+| CHAT-05 | Phase 1 | Complete |
+| CHAT-06 | Phase 1 | Complete |
+| CHAT-07 | Phase 1 | Complete |
 | CHAT-08 | Phase 4 | Pending |
 | REAL-01 | Phase 2 | Pending |
 | REAL-02 | Phase 2 | Pending |
@@ -425,7 +425,7 @@
 | PLAT-10 | Phase 2 | Pending |
 | PLAT-11 | Phase 2 | Pending |
 | PLAT-12 | Phase 5 | Pending |
-| IFC-08 | Phase 1 | Pending |
+| IFC-08 | Phase 1 | Complete |
 | RES-02 | Phase 1 | Complete |
 | RES-03 | Phase 1 | Complete |
 
