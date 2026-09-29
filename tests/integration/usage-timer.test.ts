@@ -61,8 +61,11 @@ let wsUrl: string;
 let stopServer: () => Promise<void>;
 let boss: PgBoss;
 
-function openSocket(conversationId: string): Promise<WebSocket> {
-  const socket = new WebSocket(`${wsUrl}?conversationId=${encodeURIComponent(conversationId)}`);
+function openSocket(conversationId: string, sessionToken: string): Promise<WebSocket> {
+  // WS 握手鉴权（01-REVIEW #1）：连接必须带 session token，服务端校验会话归属。
+  const socket = new WebSocket(
+    `${wsUrl}?conversationId=${encodeURIComponent(conversationId)}&token=${encodeURIComponent(sessionToken)}`,
+  );
   return new Promise((resolve, reject) => {
     socket.addEventListener('open', () => resolve(socket));
     socket.addEventListener('error', () => reject(new Error('WebSocket 连接失败')));
@@ -181,7 +184,7 @@ afterAll(async () => {
 describe('连续使用计时（COMPLY-03 / D-14）', () => {
   it('(a) 7199 秒 + 一条消息 ⇒ 恰好一次提醒事件', async () => {
     const seeded = await seedConversation('usage-a');
-    const socket = await openSocket(seeded.conversationId);
+    const socket = await openSocket(seeded.conversationId, seeded.sessionToken);
 
     // 第一条消息只是把段建起来。
     await runTurn({ conversationId: seeded.conversationId, userId: seeded.userId, text: '你好' });
@@ -214,7 +217,7 @@ describe('连续使用计时（COMPLY-03 / D-14）', () => {
     await new Promise((resolve) => setTimeout(resolve, 1_200));
 
     // 重连（新 WS 连接）本身不改变累计 —— 计时状态不在连接上。
-    const socket = await openSocket(seeded.conversationId);
+    const socket = await openSocket(seeded.conversationId, seeded.sessionToken);
     await new Promise((resolve) => setTimeout(resolve, 100));
     const afterReconnect = await openSegment(seeded.userId);
     expect(afterReconnect?.id).toBe(before?.id);
@@ -279,7 +282,7 @@ describe('连续使用计时（COMPLY-03 / D-14）', () => {
 
   it('(d) 累计到 4 小时触发两次而非一次（重复语义）', async () => {
     const seeded = await seedConversation('usage-d');
-    const socket = await openSocket(seeded.conversationId);
+    const socket = await openSocket(seeded.conversationId, seeded.sessionToken);
     await runTurn({ conversationId: seeded.conversationId, userId: seeded.userId, text: '你好' });
 
     // 第一次提醒：跨过 7200 × (0 + 1)。
@@ -302,7 +305,7 @@ describe('连续使用计时（COMPLY-03 / D-14）', () => {
 
   it('(e) 只读不发：仅靠 pg-boss 到点作业也收到提醒', async () => {
     const seeded = await seedConversation('usage-e');
-    const socket = await openSocket(seeded.conversationId);
+    const socket = await openSocket(seeded.conversationId, seeded.sessionToken);
     // 直接插段（fixtures 形态），不经任何 touch —— touch 会给段排一个 7200s 的
     // 同 singletonKey 作业，short 策略会让本用例的 1s 作业被拒绝。本用例考的
     // 是「到点作业自己就能提醒」，段怎么来的不重要。
@@ -328,7 +331,7 @@ describe('连续使用计时（COMPLY-03 / D-14）', () => {
 
   it('(f) 同一提醒作业重复执行两次只产生一次提醒（条件更新幂等）', async () => {
     const seeded = await seedConversation('usage-f');
-    const socket = await openSocket(seeded.conversationId);
+    const socket = await openSocket(seeded.conversationId, seeded.sessionToken);
     await runTurn({ conversationId: seeded.conversationId, userId: seeded.userId, text: '你好' });
     await forceSegment(seeded.userId, { accumulated: 7199, lastActivityAgoMs: 2_000 });
     const segment = await openSegment(seeded.userId);

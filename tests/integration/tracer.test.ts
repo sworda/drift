@@ -122,8 +122,14 @@ function waitForFrame(
   });
 }
 
-function openSocket(conversationId: string): Promise<WebSocket> {
-  const socket = new WebSocket(`${wsUrl}?conversationId=${encodeURIComponent(conversationId)}`);
+function openSocket(conversationId: string, token: string | null = null): Promise<WebSocket> {
+  // WS 握手鉴权（01-REVIEW #1）：合法连接带 session token；省略 token 的形态留给
+  // ws-auth.test.ts 的未认证断言（那里断言的正是「不带 token 收不到帧」）。
+  const query =
+    token === null
+      ? `conversationId=${encodeURIComponent(conversationId)}`
+      : `conversationId=${encodeURIComponent(conversationId)}&token=${encodeURIComponent(token)}`;
+  const socket = new WebSocket(`${wsUrl}?${query}`);
   return new Promise((resolve, reject) => {
     socket.addEventListener('open', () => {
       resolve(socket);
@@ -276,7 +282,7 @@ describe('tracer —— 一条真实消息打穿全链路', () => {
   });
 
   it('(5)(6)(7)(8) 发一条消息：seq 1/2 无空洞、disclosure 非空、llm_call 成对、WS 收到同一个 seq', async () => {
-    const socket = await openSocket(conversationId);
+    const socket = await openSocket(conversationId, user.sessionToken);
     const frameArrived = waitForFrame(socket, (frame) => frame.type === 'message.created');
 
     const response = await fetch(`${baseUrl}/conversations/${conversationId}/messages`, {
@@ -424,7 +430,7 @@ describe('tracer —— 一条真实消息打穿全链路', () => {
     expect(gated.outcome).toBe('gated');
     if (gated.outcome !== 'gated') return;
 
-    const socket = await openSocket(backfillConversationId);
+    const socket = await openSocket(backfillConversationId, user.sessionToken);
 
     await tx(async (t) => {
       // Plan 09：消息落库要一张 sensitive_pi 的同意票（RESEARCH §6.3）。

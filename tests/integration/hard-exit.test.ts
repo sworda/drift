@@ -57,8 +57,11 @@ let wsUrl: string;
 let stopServer: () => Promise<void>;
 let boss: PgBoss;
 
-function openSocket(conversationId: string): Promise<WebSocket> {
-  const socket = new WebSocket(`${wsUrl}?conversationId=${encodeURIComponent(conversationId)}`);
+function openSocket(conversationId: string, sessionToken: string): Promise<WebSocket> {
+  // WS 握手鉴权（01-REVIEW #1）：连接必须带 session token，服务端校验会话归属。
+  const socket = new WebSocket(
+    `${wsUrl}?conversationId=${encodeURIComponent(conversationId)}&token=${encodeURIComponent(sessionToken)}`,
+  );
   return new Promise((resolve, reject) => {
     socket.addEventListener('open', () => resolve(socket));
     socket.addEventListener('error', () => reject(new Error('WebSocket 连接失败')));
@@ -131,7 +134,7 @@ afterAll(async () => {
 describe('硬退出（COMPLY-05 / D-12）', () => {
   it('(a) 排定延迟作业后硬退出，触发作业 ⇒ 0 条出站消息；会话级作业被显式取消', async () => {
     const seeded = await seedConversation('exit-a');
-    const socket = await openSocket(seeded.conversationId);
+    const socket = await openSocket(seeded.conversationId, seeded.sessionToken);
 
     // ① 会话级探针作业（singletonKey = conversationId，远期 startAfter —— 不自动跑）。
     await boss.send(PROBE_QUEUE, { note: 'probe' }, { startAfter: 3_600, singletonKey: seeded.conversationId });
@@ -260,7 +263,7 @@ describe('硬退出（COMPLY-05 / D-12）', () => {
     expect(published).toBe(0);
     // 段本身的条件更新照常发生（提醒计数不是投递的前提）—— 但一个字节都
     // 不该进任何 WS 房间。
-    const socket = await openSocket(seeded.conversationId);
+    const socket = await openSocket(seeded.conversationId, seeded.sessionToken);
     const frames = await collectFrames(socket, 1_500);
     expect(frames.filter((f) => f.type === 'usage.reminder')).toHaveLength(0);
     socket.close();

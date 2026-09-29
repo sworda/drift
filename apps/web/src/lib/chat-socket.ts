@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { WsDownstream, type WsDownstream as WsDownstreamType } from '@drift/contract';
 
-import { API_ORIGIN } from './session';
+import { API_ORIGIN, readSessionToken } from './session';
 
 /** ws(s) 基址，与 API_ORIGIN 同源（STACK §4：单条 WebSocket 承载全部实时语义）。 */
 function wsOrigin(): string {
@@ -62,7 +62,14 @@ export function useChatSocket(conversationId: string | null, handlers: ChatSocke
     const connect = (): void => {
       if (closed) return;
       setState(attempt === 0 ? 'connecting' : 'disconnected');
-      socket = new WebSocket(`${wsOrigin()}/ws?conversationId=${encodeURIComponent(conversationId)}`);
+      // 浏览器的 WebSocket API 不能设 Authorization 头，身份只能走 `?token=`（服务端
+      // 在握手里校验归属，见 apps/api/src/ws/server.ts）。代价是 token 会出现在反代
+      // 访问日志的 query 里 —— Caddyfile 的 log filter 把 query 整段删掉后才落日志，
+      // 两处是同一修复的两半（01-REVIEW #1/#2）。
+      const token = readSessionToken();
+      const query = `conversationId=${encodeURIComponent(conversationId)}`;
+      const fullQuery = token === null ? query : `${query}&token=${encodeURIComponent(token)}`;
+      socket = new WebSocket(`${wsOrigin()}/ws?${fullQuery}`);
       socket.onopen = () => {
         if (closed) return;
         const isReconnect = attempt > 0;

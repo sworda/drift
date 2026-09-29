@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { asc } from 'drizzle-orm';
 
 import { CONSENT_SCOPES, REQUIRED_SCOPES } from '@drift/contract';
-import { character, consent, conversation, inviteCode, ownerDb, user } from '@drift/db';
+import { character, consent, conversation, inviteCode, ownerDb, session, user } from '@drift/db';
 
 /**
  * fixture 用户的政策版本。真实注册取 privacy.md 的内容哈希（apps/api 的 register.ts），
@@ -23,6 +23,11 @@ export interface SeededConversation {
   readonly userId: string;
   readonly conversationId: string;
   readonly characterId: string;
+  /**
+   * 该用户的 session token —— WS 握手鉴权（01-REVIEW #1 修复）需要它：
+   * /ws 现在按 `?token=` 校验身份与归属，测试的 WS 连接必须带上。
+   */
+  readonly sessionToken: string;
 }
 
 /** 取种子角色里的第一个（seed 保证有 3 个且各带一个生效的 persona_version）。 */
@@ -75,5 +80,15 @@ export async function seedConversation(label: string): Promise<SeededConversatio
     .returning({ id: conversation.id });
   const conversationId = conversationRows[0]?.id;
   if (conversationId === undefined) throw new Error('会话插入未返回行');
-  return { userId, conversationId, characterId };
+
+  // session 行：WS 握手按 resolveSession(token) 解析身份（与 HTTP 的 Bearer 同一条
+  // 路径），fixture 用户也要有一条真实 session 才能连上鉴权后的 /ws。
+  const sessionToken = `fixture-session-${randomUUID()}`;
+  await ownerDb.insert(session).values({
+    token: sessionToken,
+    userId,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+  });
+
+  return { userId, conversationId, characterId, sessionToken };
 }

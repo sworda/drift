@@ -4,7 +4,17 @@
 // 只要别处能 `new WebSocketServer`，那条约束就可以被一个新出口静默绕过。
 // eslint.config.js 里对除本目录外的全部文件禁止导入 `ws`，就是这条边界的机械形式。
 //
-// 范围：连接建立、心跳、按 conversationId 的房间登记，以及**唯一的一条**下发路径。
+// 范围：连接建立（含身份与归属校验）、心跳、按 conversationId 的房间登记，以及
+// **唯一的一条**下发路径。
+//
+// ── 鉴权（01-REVIEW Finding #1 修复）──────────────────────────────────────────
+// 浏览器的 WebSocket API **不能设 Authorization 头** —— 身份只能走查询参数 `?token=`
+//（与删除回执的「持有即有权」同风格）。代价是 token 会出现在访问日志的 query 里，
+// 因此 Caddyfile 的 log 配置**必须**把 query 整段从 request>uri 里删掉后才落日志
+//（两处改动是同一个修复的两半，改其一不改另一等于把一个洞换成另一个）。
+// 校验流程：resolveSession(token) → conversation.userId === session.userId，任何一环
+// 失败都以同一个 4400 + 同一句 'unauthorized' 关闭 —— 不区分「token 无效」与
+//「无权限」（T-09-06：区分开就是可枚举的旁路），fail-closed：DB 故障同样拒绝。
 //
 // ── 出口签名（D-15）────────────────────────────────────────────────────────────
 //   deliver(target, text: GatedText, seq)   ← 承载消息正文，只接受 GatedText
@@ -17,6 +27,8 @@
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
 
 import type { GatedText, Disclosure, WsDownstream } from '@drift/contract';
+import { conversation, db, resolveSession } from '@drift/db';
+import { eq } from 'drizzle-orm';
 import { WebSocketServer, type WebSocket } from 'ws';
 
 import { logError, logEvent } from '../obs/logger.ts';
@@ -30,6 +42,9 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 const MAX_PAYLOAD_BYTES = 64 * 1024;
 
 const CLOSE_MISSING_CONVERSATION = 4400;
+
+/** 身份 / 归属校验失败（或 DB 故障 fail-closed）。与缺参同码，但 close reason 单一 —— 见文件头。 */
+const CLOSE_UNAUTHORIZED = 4400;
 
 export interface WebSocketHandle {
   /** 某个会话当前挂着几条连接。投递与验收都读它。 */
@@ -100,12 +115,40 @@ export function publish(conversationId: string, event: TextlessDownstream): numb
   return sent;
 }
 
-function readConversationId(req: IncomingMessage): string | null {
+function readQueryParam(req: IncomingMessage, name: string, maxLength: number): string | null {
   // req.url 只有 path + query；base 仅用于构造 URL，不参与任何判断。
   const url = new URL(req.url ?? '/', 'http://localhost');
-  const raw = url.searchParams.get('conversationId');
-  if (raw === null || raw.length === 0 || raw.length > 64) return null;
+  const raw = url.searchParams.get(name);
+  if (raw === null || raw.length === 0 || raw.length > maxLength) return null;
   return raw;
+}
+
+/**
+ * 握手身份与归属校验。返回 true = 允许入房间。
+ *
+ * 三种失败（token 缺失/无效、会话不存在、无归属权）与 DB 故障全部走同一条拒绝路径
+ * —— 调用方只知道「不允许」，客户端只见同一个 4400 + 'unauthorized'。
+ */
+async function authorizeConnection(
+  conversationId: string,
+  token: string | null,
+): Promise<boolean> {
+  if (token === null) return false;
+  try {
+    const session = await resolveSession(token);
+    if (session === null) return false;
+    const rows = await db
+      .select({ userId: conversation.userId })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1);
+    return rows[0]?.userId === session.userId;
+  } catch (error) {
+    // fail-closed：鉴权链路上的任何故障都按拒绝处理 —— 放行一个未验明身份的
+    // 连接比拒绝一个合法连接严重得多（旁听危机对话 vs 重连后补拉）。
+    logError('ws.auth_error', error as Error, { conversationId });
+    return false;
+  }
 }
 
 export function attachWebSocket(server: HttpServer): WebSocketHandle {
@@ -115,12 +158,24 @@ export function attachWebSocket(server: HttpServer): WebSocketHandle {
   let connectionSeq = 0;
 
   wss.on('connection', (socket: WebSocket, req: IncomingMessage) => {
-    const conversationId = readConversationId(req);
+    const conversationId = readQueryParam(req, 'conversationId', 64);
     if (conversationId === null) {
       socket.close(CLOSE_MISSING_CONVERSATION, 'conversationId required');
       return;
     }
 
+    const token = readQueryParam(req, 'token', 512);
+    void authorizeConnection(conversationId, token).then((authorized: boolean) => {
+      if (!authorized) {
+        logEvent('ws.auth_rejected', { conversationId });
+        socket.close(CLOSE_UNAUTHORIZED, 'unauthorized');
+        return;
+      }
+      admitConnection(socket, conversationId);
+    });
+  });
+
+  function admitConnection(socket: WebSocket, conversationId: string): void {
     connectionSeq += 1;
     const wsConnectionId = `ws-${String(connectionSeq)}`;
     alive.add(socket);
@@ -156,7 +211,7 @@ export function attachWebSocket(server: HttpServer): WebSocketHandle {
         count: current?.size ?? 0,
       });
     });
-  });
+  }
 
   const heartbeat = setInterval(() => {
     for (const socket of wss.clients) {

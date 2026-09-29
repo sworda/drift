@@ -40,8 +40,11 @@ let wsUrl: string;
 let stopServer: () => Promise<void>;
 let boss: PgBoss;
 
-function openSocket(conversationId: string): Promise<WebSocket> {
-  const socket = new WebSocket(`${wsUrl}?conversationId=${encodeURIComponent(conversationId)}`);
+function openSocket(conversationId: string, sessionToken: string): Promise<WebSocket> {
+  // WS 握手鉴权（01-REVIEW #1）：连接必须带 session token，服务端校验会话归属。
+  const socket = new WebSocket(
+    `${wsUrl}?conversationId=${encodeURIComponent(conversationId)}&token=${encodeURIComponent(sessionToken)}`,
+  );
   return new Promise((resolve, reject) => {
     socket.addEventListener('open', () => resolve(socket));
     socket.addEventListener('error', () => reject(new Error('WebSocket 连接失败')));
@@ -147,7 +150,7 @@ describe('依赖信号日扫（COMPLY-04）', () => {
 
   it('(b)(c) 命中 ⇒ 写行 + 发事件；evidence 不含消息正文', async () => {
     const seeded = await seedConversation('dep-hit');
-    const socket = await openSocket(seeded.conversationId);
+    const socket = await openSocket(seeded.conversationId, seeded.sessionToken);
     // 一条带唯一标记的用户消息 —— evidence 序列化后不得含它的任何子串。
     const marker = 'DEP-SCAN-MARKER-x7q9';
     await db.execute(
