@@ -16,12 +16,25 @@
 {$SITE_ADDRESS} {
 	encode zstd gzip
 
-	# 访问日志**不含**请求体（Caddy 默认不记录 body）。这与 apps/api 的 pino
-	# 白名单是同一条约束：日志是一个不能按行删除的存储位置，一键删除（PRIV-05）
-	# 级联不到它，所以它必须从设计上不含消息正文。
+	# 访问日志从设计上不含个人信息，成立条件有两条（缺一即失守）：
+	#   1. 不记请求体 —— Caddy 默认不记录 body，这条无需配置；
+	#   2. query 里的凭证键（token / conversationId）在写日志前被 filter 删除。
+	#      /ws?conversationId=&token=（session token）与 /privacy-receipts/:id?token=
+	#      （一次性回执凭证）都会把凭证写进一个不能按行删除的存储位置（容器 stdout），
+	#      一键删除（PRIV-05）级联不到它。这与 apps/api 的 pino 白名单是同一条约束。
+	#      ⚠️ 新增任何「query 传凭证」的路径，必须同步在这里加 delete，注释即契约。
 	log {
 		output stdout
-		format console
+		format filter {
+			wrap console
+			request>uri query {
+				# 凭证与渠道标识在写日志前从 query 里删除（脱敏 URI）。
+				# token：/ws 的 session token 与 /privacy-receipts 的一次性回执凭证。
+				# conversationId：acute 告警载荷外流的渠道（01-REVIEW #1）。
+				delete token
+				delete conversationId
+			}
+		}
 	}
 
 	# apps/api 的三条对外路径。单条 WebSocket 承载全部实时语义（STACK §4），

@@ -17,6 +17,8 @@
 // 未完成态）；作业完成即删除了 session，同一路由转 401 —— 前端收到 401 时切换
 // 到 token 路径。两条路读的是同一行 privacy_action。
 
+import { timingSafeEqual } from 'node:crypto';
+
 import { ACCOUNT_DELETION_CONFIRMATION_PHRASE } from '@drift/contract';
 import { db, privacyAction, tx } from '@drift/db';
 import { and, eq } from 'drizzle-orm';
@@ -35,6 +37,18 @@ const DeleteBody = z
   .default(() => ({}));
 
 export const deleteRoutes = new Hono();
+
+/**
+ * 回执 token 的恒时比对（01-REVIEW #2 修复：注释曾声称恒时，实现却是普通 !==）。
+ *
+ * 长度不等时先短路：回执 token 是 createDeletionAction 生成的固定长度随机 UUID，
+ * 真值长度恒定 —— 短路只暴露「来者长度不对」，而这个信息本来就握在来者自己手里，
+ * 不构成旁路。长度相等后的逐字节比较走 node:crypto 的 timingSafeEqual。
+ */
+function receiptTokenMatches(expected: string, provided: string): boolean {
+  if (expected.length !== provided.length) return false;
+  return timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(provided, 'utf8'));
+}
 
 deleteRoutes.post('/me/delete', async (c) => {
   const userId = await currentUserId(c);
@@ -102,9 +116,8 @@ deleteRoutes.get('/privacy-receipts/:actionId', async (c) => {
     .where(eq(privacyAction.id, actionId))
     .limit(1);
   const payload = rows[0]?.payload as { readonly receiptToken?: string } | undefined;
-  // 恒时比较：回执行是 128 位随机 id 的直接对象查询，token 比对不泄露时序信息
-  // 之外的东西 —— 但写成形似恒时的比较成本为零。
-  if (payload === undefined || payload.receiptToken !== token) {
+  const expected = payload?.receiptToken;
+  if (expected === undefined || !receiptTokenMatches(expected, token)) {
     return c.json({ error: 'not_found' }, 404);
   }
   return c.json(payload);
