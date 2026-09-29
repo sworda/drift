@@ -54,7 +54,7 @@ export default function ConversationsPage() {
   }, [load]);
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-[480px]">
+    <main className="mx-auto min-h-dvh w-full max-w-[480px] md:max-w-[640px] lg:max-w-[720px]">
       <h1 className="px-md py-lg text-heading font-semibold text-text-primary">
         {CONVERSATIONS_TITLE}
       </h1>

@@ -175,7 +175,7 @@ function renderMarkdown(markdown: string): ReactNode[] {
 /** 渲染一份法务文档（RTL 渲染层断言的直接对象）。 */
 export function LegalDocPage({ title, markdown }: LegalDocPageProps) {
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-[480px]">
+    <main className="mx-auto min-h-dvh w-full max-w-[480px] md:max-w-[640px] lg:max-w-[720px]">
       <h1 className="sr-only">{title}</h1>
       {/* 滚动容器：语义上就是 scroll-area（纵向滚动、内容完整存在于 DOM、不截断）。 */}
       <div className="overflow-y-auto px-md py-lg">

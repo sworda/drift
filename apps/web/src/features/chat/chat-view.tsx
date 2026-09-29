@@ -192,8 +192,14 @@ export function ChatView({
                               : undefined
                           }
                         >
-                          {/* text-base 覆写上游默认的 14px。padding 保持默认的 12/8。 */}
-                          <BubbleContent className="max-w-[80%] text-base break-words whitespace-normal">
+                          {/* text-base 覆写上游默认的 14px。padding 保持默认的 12/8。
+                              ⚠️ 这里**不得**再挂 max-w-*：气泡的宽度上限（80%）由上游
+                              Bubble 承担，而 Bubble 是 w-fit —— 气泡宽由内容决定。内容盒
+                              再取「气泡的百分比」，就与「气泡宽 = 内容宽」互相引用，形成
+                              循环百分比；引擎只能把整条气泡压窄，长消息被 break-words 从
+                              词中间切断（E4 backstop 的真实失败形态）。内容盒保持上游的
+                              max-w-full（撑满气泡）才是这个原语的分工。 */}
+                          <BubbleContent className="text-base break-words whitespace-normal">
                             {entry.text}
                           </BubbleContent>
                         </Bubble>

@@ -49,7 +49,7 @@ created: "2026-09-25"
 | Icon library | **lucide-react**（shadcn 默认；Phase 1 只用到 ~12 个图标，不引入第二套） |
 | Font | **系统字体栈**：`-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif`。零网络字体开销，中文字形贴近用户本机 IM 观感 —— 这正是「类微信」的第一性目标 |
 | Dark mode | **v1 不做**。CSS 变量留 `.dark` 插槽但不实现。理由：AI 标识「可被用户明显感知」是法定要求，双主题会让对比度验收工作量翻倍 |
-| 目标视口 | 移动优先（375–430px 宽），桌面为等宽居中单列（max-width 480px）+ 侧栏会话列表（≥1024px）。Phase 1 不做平板专属断点 |
+| 目标视口 | 移动优先（375–430px 宽），桌面为等宽居中单列（max-width 480px）+ 侧栏会话列表（≥1024px）。Phase 1 不做平板专属断点。<br>**2026-09-28 走查修正（列宽）**：纯 480px 单列在 PC 上是一条居中窄条（1440 视口实测两侧空 960px，取证见 `chat-client.tsx` 的列宽注释）。**侧栏（≥1024px）仍是桌面终态、尚未实现**；在此之前单列补两档断点先缓解：**≥48rem → 640px，≥64rem → 720px**（48rem/64rem 即 Tailwind 的 `md`/`lg`）。全站单列页面统一（chat / conversations / characters / privacy / legal / receipt / error-boundary 共 10 处 `max-w-[480px]`）。侧栏落地后本行应改回单一值并删除这两档。 |
 
 ---
 

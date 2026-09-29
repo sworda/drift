@@ -52,7 +52,7 @@ export class AppErrorBoundary extends Component<{ readonly children: ReactNode }
   override render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <main className="mx-auto flex min-h-dvh max-w-[480px] flex-col items-start gap-sm p-md">
+        <main className="mx-auto flex min-h-dvh max-w-[480px] md:max-w-[640px] lg:max-w-[720px] flex-col items-start gap-sm p-md">
           <h1 className="text-heading font-semibold text-text-primary">页面出了点问题</h1>
           <p className="text-body text-text-secondary">
             这个页面没有正常显示 —— 刷新一次通常可以恢复。如果反复出现，可以从隐私中心导出你的数据留一份。

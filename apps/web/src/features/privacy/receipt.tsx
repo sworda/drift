@@ -60,7 +60,7 @@ export function DeletionReceipt({ receipt, onRetry, onExportCopy }: DeletionRece
   const deidentifiedItems = receipt.items.filter((item) => item.deidentified);
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-[480px] px-md pb-lg">
+    <main className="mx-auto min-h-dvh w-full max-w-[480px] md:max-w-[640px] lg:max-w-[720px] px-md pb-lg">
       {partial ? (
         <>
           {/* 部分失败：**禁止**渲染「已删除完成」—— 如实分列 M/N。 */}

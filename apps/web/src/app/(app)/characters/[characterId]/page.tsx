@@ -45,7 +45,7 @@ export default function CharacterDetailPage() {
   }, [load]);
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-[480px]">
+    <main className="mx-auto min-h-dvh w-full max-w-[480px] md:max-w-[640px] lg:max-w-[720px]">
       {state.kind === 'loading' ? <CharacterDetailSkeleton /> : null}
       {state.kind === 'error' ? (
         <EmptyOrError

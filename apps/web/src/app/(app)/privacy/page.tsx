@@ -86,7 +86,7 @@ export default function PrivacyPage() {
   );
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-[480px]">
+    <main className="mx-auto min-h-dvh w-full max-w-[480px] md:max-w-[640px] lg:max-w-[720px]">
       <PrivacyTabs active={tab} onChange={setTab} />
 
       {state.kind === 'loading' ? (

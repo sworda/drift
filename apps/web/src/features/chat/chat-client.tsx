@@ -324,7 +324,10 @@ export function ChatClient({ conversationId }: { readonly conversationId: string
   const characterName = conversation?.characterName ?? '';
 
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-[480px] flex-col">
+    // 列宽断点：480 / 640(≥48rem) / 720(≥64rem)。480 是移动端原始契约宽度，
+    // 后两档是 2026-09-28 的走查修正 —— 纯 480 在 PC 上是一条居中窄条（1440 视口
+    // 两侧空 960px）。断点值同步登记在 01-UI-SPEC.md ## Design System 目标视口行。
+    <div className="mx-auto flex h-dvh w-full max-w-[480px] md:max-w-[640px] lg:max-w-[720px] flex-col">
       {/* 页面头部：返回（icon-only ①）+ 角色名 + AI 徽标 + 更多（icon-only ④）。
           30 字角色名时徽标仍完整可见：标题 truncate、徽标 shrink-0。 */}
       <header className="flex h-14 shrink-0 items-center gap-sm border-b border-border bg-card px-sm">

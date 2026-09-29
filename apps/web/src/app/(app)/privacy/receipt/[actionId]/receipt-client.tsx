@@ -46,7 +46,7 @@ export function ReceiptClient({
 
   if (state.kind === 'loading') {
     return (
-      <main className="mx-auto min-h-dvh w-full max-w-[480px] px-md">
+      <main className="mx-auto min-h-dvh w-full max-w-[480px] md:max-w-[640px] lg:max-w-[720px] px-md">
         <p className="pt-lg text-body text-text-secondary" role="status">
           正在读取删除回执……
         </p>
@@ -56,7 +56,7 @@ export function ReceiptClient({
 
   if (state.kind === 'not_found') {
     return (
-      <main className="mx-auto min-h-dvh w-full max-w-[480px] px-md">
+      <main className="mx-auto min-h-dvh w-full max-w-[480px] md:max-w-[640px] lg:max-w-[720px] px-md">
         <h1 className="pt-lg text-heading font-semibold text-text-primary">找不到这份回执</h1>
         <p className="mt-md whitespace-normal break-words text-body leading-relaxed text-text-secondary">
           回执链接不完整或已失效。如果删除没有完成，请回到隐私中心再试一次；如果反复失败，请提交申诉，我们会人工处理并回复你。

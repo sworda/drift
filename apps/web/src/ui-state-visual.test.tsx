@@ -63,9 +63,13 @@ describe('backstop 2：2000 字单条消息 —— 80% 宽 + 强制换行，不�
     ];
     const { container } = render(<ChatView messages={messages} />);
     expect(screen.getByText(longText)).toBeDefined();
-    const bubble = container.querySelector('[data-slot="bubble-content"]');
+    // 80% 宽度上限住在**气泡外框**（Bubble）上，不在内容盒上：Bubble 是 w-fit，
+    // 内容盒再按百分比设限会与「气泡宽 = 内容宽」形成循环引用，把气泡压窄。
+    const bubble = container.querySelector('[data-slot="bubble"]');
+    const bubbleContent = container.querySelector('[data-slot="bubble-content"]');
     expect(bubble?.className).toContain('max-w-[80%]');
-    expect(bubble?.className).toContain('break-words');
+    expect(bubbleContent?.className).not.toMatch(/max-w-\[/u);
+    expect(bubbleContent?.className).toContain('break-words');
   });
 });
 

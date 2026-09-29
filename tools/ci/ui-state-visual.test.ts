@@ -45,11 +45,17 @@ describe('backstop 1：30 字角色名不挤出 AI 徽标（T-14-05）', () => {
 });
 
 describe('backstop 2：2000 字单条消息不横向滚动、不遮挡常驻条', () => {
-  it('气泡内容宽 80% + break-words（长词/长串强制换行）', () => {
-    const view = read('apps/web/src/features/chat/chat-view.tsx');
-    expect(view).toContain('max-w-[80%]');
+  it('气泡 80% 上限住在 Bubble 上、内容盒不再二次设限 + break-words（长词/长串强制换行）', () => {
+    // 去注释后再断言：说明注释必须能写出被禁的类名来解释规则本身
+    // （banned-terms 同一先例）。
+    const view = stripComments(read('apps/web/src/features/chat/chat-view.tsx'));
+    expect(view).toContain('<Bubble');
     expect(view).toContain('break-words');
     expect(view).toContain('whitespace-normal');
+    // 内容盒上不得出现 max-w-*：气泡是 w-fit，内容盒按百分比设限会与
+    // 「气泡宽 = 内容宽」互相引用，形成循环百分比并把整条气泡压窄。
+    // 80% 上限由 components/ui/bubble.tsx 的 Bubble 承担。
+    expect(view).not.toContain('max-w-');
   });
 
   it('消息流容器是 overflow-y-auto 的窄向滚动（横向不滚）', () => {
