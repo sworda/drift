@@ -141,7 +141,7 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Pending Todos
 
-None yet.
+- [2026-09-29] [ui] 桌面端会话侧栏布局（≥1024px，回到 UI-SPEC 桌面终态） — [todo file](.planning/todos/pending/2026-09-29-desktop-sidebar-layout-1024px.md) — Needs 1. **布局**：≥1024px 变「左侧会话列表 + 右侧当前会话」；会话列宽回到 SPEC 单一值（不再靠 md/lg 断点撑宽）。<1024px 保持现有单页导航不变。.
 
 ### Blockers/Concerns
 
