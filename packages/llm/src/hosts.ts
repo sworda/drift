@@ -58,6 +58,53 @@ export const DENIED_LLM_HOSTS: ReadonlySet<string> = Object.freeze(
 );
 
 /**
+ * 回环 host：localhost / 127.x.x.x / [::1]，允许带任意端口。
+ *
+ * 回环地址不出网卡，「真实对话出境」（T-05-01）对它不成立，所以它不需要进
+ * ALLOWED_LLM_HOSTS 就能被 classifyHost 放行 —— 本地代理服务（llm.config.json 的
+ * 配置 provider）跑在这里。
+ *
+ * 端口剥离：IPv6 字面量形如 `[::1]:8080`（从 `]` 后剥），其余从最后一个 `:` 剥。
+ */
+const LOOPBACK_HOST_PATTERN = /^(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?$/;
+
+/** 判定一个 host（hostOf 的返回值，可能带端口）是否回环。 */
+export function isLoopbackHost(host: string): boolean {
+  return LOOPBACK_HOST_PATTERN.test(host);
+}
+
+/**
+ * 配置文件（llm.config.json）声明的自定义 provider host。
+ *
+ * 这些 host 不写进 ALLOWED_LLM_HOSTS（写死在 git 里的是「厂商直连」表），而是在
+ * 启动加载配置时**一次性**经 registerConfiguredHosts 注入。注入窗口关闭后再次调用
+ * 即抛错 —— 与 routes.ts 的「不接受运行时覆盖」同一条哲学：配置只在进程启动时读
+ * 一次，之后全部表结构不可变。
+ *
+ * ⚠️ DENIED_LLM_HOSTS（网关黑名单）**不可配置覆盖**：已知 LLM 网关即使写进配置文件
+ * 也照样拒绝 —— 那是 T-05-01 的确切形态，不属于「部署者可自行决定」的范围。
+ */
+const CONFIGURED_LLM_HOSTS = new Set<string>();
+let configuredHostsFrozen = false;
+
+/**
+ * 注册配置声明的 host。只能在启动期调用一次；第二次调用抛错。
+ * 与 DENIED_LLM_HOSTS 相交的 host 直接拒绝注册（fail-fast，不留到断言才发现）。
+ */
+export function registerConfiguredHosts(hosts: Iterable<string>): void {
+  if (configuredHostsFrozen) {
+    throw new Error('registerConfiguredHosts 已冻结：host 白名单只在进程启动时注入一次，不接受运行时篡改。');
+  }
+  for (const host of hosts) {
+    if (DENIED_LLM_HOSTS.has(host)) {
+      throw new Error(`配置文件声明了已知 LLM 网关 host：${host} —— 网关把请求转发到别处，流量落在哪个国家不可知，拒绝注册。`);
+    }
+    CONFIGURED_LLM_HOSTS.add(host);
+  }
+  configuredHostsFrozen = true;
+}
+
+/**
  * 取 baseURL 的 host。`null`（不出网）映射到哨兵值，于是调用方不需要写分支。
  *
  * 解析失败即抛错：一个解析不出 host 的 baseURL 无法被白名单检查，
@@ -75,4 +122,25 @@ export function hostOf(baseUrl: string | null): string {
     throw new Error(`baseURL 解析后没有 host：${baseUrl}`);
   }
   return parsed.host;
+}
+
+/**
+ * 仅供测试：重置配置 host 注册表，让下一个用例可以注入不同的配置副本。
+ *
+ * ⚠️ 绝不在生产代码调用 —— 它的存在是「断言必须可证伪」的成本：没有它，
+ * 契约测试只能测第一个注入的配置，之后的用例全部空转。
+ */
+export function resetConfiguredHostsForTests(): void {
+  CONFIGURED_LLM_HOSTS.clear();
+  configuredHostsFrozen = false;
+}
+
+/** 成员判定：classifyHost 用（活集合，读启动时注入的配置 host）。 */
+export function isConfiguredHost(host: string): boolean {
+  return CONFIGURED_LLM_HOSTS.has(host);
+}
+
+/** 断言与测试用：当前已注册的配置 host 快照。 */
+export function configuredLlmHosts(): ReadonlySet<string> {
+  return Object.freeze(new Set(CONFIGURED_LLM_HOSTS));
 }

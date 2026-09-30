@@ -35,6 +35,7 @@ import {
   NEXT_STEP_LABEL,
   PASSWORD_TOO_SHORT_ERROR,
   REGISTER_CTA,
+  REGISTER_EMAIL_USED_ERROR,
   REGISTER_SUBMIT_ERROR,
 } from './copy';
 import { CONTACT_NAME_INPUT_ID, CONTACT_PHONE_INPUT_ID } from './emergency-contact';
@@ -46,6 +47,7 @@ import {
 import {
   MISSING_REQUIRED_TESTID,
   OnboardingSteps,
+  RegisterApiError,
   SUBMIT_ERROR_TESTID,
   type AccountFields,
 } from './steps';
@@ -327,6 +329,45 @@ describe('提交失败保留已填内容 + 全屏唯一 28px', () => {
     fireEvent.click(screen.getByRole('button', { name: '上一步' }));
     expect((screen.getByLabelText(/邀请码/u) as HTMLInputElement).value).toBe(ADULT.inviteCode);
     expect((screen.getByLabelText(/昵称/u) as HTMLInputElement).value).toBe(ADULT.name);
+  });
+
+  it('服务端细分错误码 ⇒ 渲染对应文案，而不是「网络中断」兜底', async () => {
+    // 2026-09-30 前的实现把「邮箱已注册」（409 + email_already_used）渲染成
+    // REGISTER_SUBMIT_ERROR（网络中断），误导排查 —— 本用例守住细分映射。
+    let selection = setScope(INITIAL_CONSENT_SELECTION, 'basic_service', true);
+    selection = setScope(selection, 'sensitive_pi', true);
+    render(
+      <OnboardingSteps
+        now={NOW}
+        initialStep={2}
+        initialAccount={ADULT}
+        initialContact={COMPLETE_CONTACT}
+        initialConsents={selection}
+        submit={() => Promise.reject(new RegisterApiError('email_already_used'))}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: REGISTER_CTA }));
+    const error = await screen.findByTestId(SUBMIT_ERROR_TESTID);
+    expect(error.textContent).toContain(REGISTER_EMAIL_USED_ERROR);
+    expect(error.textContent).not.toContain(REGISTER_SUBMIT_ERROR);
+  });
+
+  it('未知错误码 ⇒ 仍渲染网络中断兜底文案', async () => {
+    let selection = setScope(INITIAL_CONSENT_SELECTION, 'basic_service', true);
+    selection = setScope(selection, 'sensitive_pi', true);
+    render(
+      <OnboardingSteps
+        now={NOW}
+        initialStep={2}
+        initialAccount={ADULT}
+        initialContact={COMPLETE_CONTACT}
+        initialConsents={selection}
+        submit={() => Promise.reject(new RegisterApiError('never_seen_code'))}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: REGISTER_CTA }));
+    const error = await screen.findByTestId(SUBMIT_ERROR_TESTID);
+    expect(error.textContent).toContain(REGISTER_SUBMIT_ERROR);
   });
 
   it.each([0, 1, 2] as const)('第 %i 步只有一个 28px 元素', (step) => {

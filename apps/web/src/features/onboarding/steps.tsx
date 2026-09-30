@@ -56,7 +56,7 @@ import {
   REGISTER_DONE_BODY,
   REGISTER_DONE_TITLE,
   REGISTER_RETRY_LABEL,
-  REGISTER_SUBMIT_ERROR,
+  registerSubmitErrorCopy,
   MISSING_REQUIRED_CONSENT_NOTE,
   MISSING_REQUIRED_PLACEHOLDER,
   STEP_TITLES,
@@ -73,6 +73,16 @@ import {
 export const STEP_TITLE_CLASS = 'text-[28px] leading-[1.2] font-semibold text-text-primary';
 
 export const SUBMIT_ERROR_TESTID = 'register-submit-error';
+
+/** 服务端返回了结构化错误码的注册失败。code 与 routes.ts 的细分一一对应。 */
+export class RegisterApiError extends Error {
+  readonly code: string;
+  constructor(code: string) {
+    super(`register rejected: ${code}`);
+    this.name = 'RegisterApiError';
+    this.code = code;
+  }
+}
 
 /** 主 CTA 禁用时那行「还差什么」的测试锚点。 */
 export const MISSING_REQUIRED_TESTID = 'register-missing-required';
@@ -115,7 +125,14 @@ async function defaultSubmit(request: RegisterRequest): Promise<void> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(request),
   });
-  if (!response.ok) throw new Error(`register failed: ${String(response.status)}`);
+  if (!response.ok) {
+    // 服务端对注册失败返回细分错误码（email_already_used / password_policy /
+    // register_failed 兜底，见 apps/api/src/modules/auth/routes.ts 的 catch）——
+    // 带上码抛出，UI 才能给出「换一个邮箱」这类可执行的下一步，而不是笼统的
+    // 「网络中断」。
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new RegisterApiError(body?.error ?? 'unknown');
+  }
   // 会话载体：服务的身份解析只认 Authorization: Bearer（auth/session.ts），不认
   // cookie —— 存下 token，后续页面的 authedFetch 才有身份可附。
   const body = (await response.json()) as { sessionToken: string };
@@ -141,6 +158,8 @@ export function OnboardingSteps({
   const [showContactErrors, setShowContactErrors] = useState(false);
   const [showAccountErrors, setShowAccountErrors] = useState(false);
   const [pending, setPending] = useState(false);
+  /** 服务端细分错误码（null = 拿不到码，如真网络断）。决定提交失败文案。 */
+  const [submitErrorCode, setSubmitErrorCode] = useState<string | null>(null);
   const [submitFailed, setSubmitFailed] = useState(false);
   const [done, setDone] = useState(false);
   // 18 岁法定终态的开关。**只**由用户明确点击「下一步」/提交置位，不随生日输入框的
@@ -207,8 +226,9 @@ export function OnboardingSteps({
         emergencyContact: contact,
       });
       setDone(true);
-    } catch {
+    } catch (error) {
       // 已填内容一个字段都不清 —— 文案明说「你填的内容都还在」。
+      setSubmitErrorCode(error instanceof RegisterApiError ? error.code : null);
       setSubmitFailed(true);
       setShowContactErrors(true);
       focusFirstInvalid();
@@ -381,7 +401,7 @@ export function OnboardingSteps({
 
         {submitFailed ? (
           <div data-testid={SUBMIT_ERROR_TESTID} role="alert" className="flex flex-col gap-2">
-            <p className="text-base text-destructive">{REGISTER_SUBMIT_ERROR}</p>
+            <p className="text-base text-destructive">{registerSubmitErrorCopy(submitErrorCode)}</p>
             <Button
               type="submit"
               variant="outline"

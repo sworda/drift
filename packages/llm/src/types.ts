@@ -56,8 +56,27 @@ export const PINNED_ONLY_ROLES = ['persona.probe'] as const satisfies readonly S
 
 export type Pinnability = 'snapshot' | 'alias-only';
 
-/** provider 名。llm_call.provider 落的是**实际执行**的那个（mock 模式下就是 'mock'）。 */
-export type ProviderName = 'volcengine' | 'zhipu' | 'aliyun' | 'anthropic' | 'deepseek' | 'mock';
+/**
+ * 内置 provider 名 —— 写死在 git 里、经 code review 与 CI 断言的那部分。
+ *
+ * llm_call.provider 落的是**实际执行**的那个（mock 模式下就是 'mock'）。
+ */
+export type BuiltinProviderName =
+  | 'volcengine'
+  | 'zhipu'
+  | 'aliyun'
+  | 'anthropic'
+  | 'deepseek'
+  | 'mock';
+
+/**
+ * provider 名全集 = 内置 + 配置注入。
+ *
+ * `(string & {})` 保留内置字面量的自动补全，同时允许 llm.config.json 声明的自定义
+ * provider（本地代理 / 腾讯云 / …）。配置 id 在启动时经 config.ts 校验并登记 ——
+ * 未登记的 provider 名在 resolveProvider 处显式抛错，而不是回落到 mock。
+ */
+export type ProviderName = BuiltinProviderName | (string & {});
 
 /**
  * 模型 → provider 归属的登记表。
@@ -74,7 +93,16 @@ export const MODELS = {
   'deepseek-flash': { provider: 'deepseek' },
 } as const satisfies Record<string, { readonly provider: ProviderName }>;
 
-export type ModelSnapshot = keyof typeof MODELS;
+/** 内置模型快照标识 —— keyof 内置 MODELS 表，编译期可查。 */
+export type BuiltinModelSnapshot = keyof typeof MODELS;
+
+/**
+ * 模型快照全集 = 内置 + 配置注入（本地代理背后的模型等）。
+ *
+ * 配置模型必须在 llm.config.json 里**显式声明可 pin 性**（pinnability 字段），
+ * 未声明即校验失败 —— 「未登记不得默认成 snapshot」这条规则对配置模型同样成立。
+ */
+export type ModelSnapshot = BuiltinModelSnapshot | (string & {});
 
 /**
  * 境外通道的消息载荷（PLAT-07）。

@@ -60,11 +60,21 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET 必填（better-auth 签名密钥，至少 32 字符；缺省会让每次重启静默登出全部用户）}
       CONTACT_ENCRYPTION_KEY: ${CONTACT_ENCRYPTION_KEY:?CONTACT_ENCRYPTION_KEY 必填（紧急联系人号码的 AES-256-GCM 密钥，64 个十六进制字符；无明文回退）}
       LLM_PROVIDER_MODE: ${LLM_PROVIDER_MODE:-mock}
+      # 模型服务配置（可选）：容器内固定路径，宿主路径由 LLM_ROUTES_CONFIG_FILE 提供。
+      # 默认 /dev/null 占位（不启用）；启用时 .env 里设 LLM_ROUTES_CONFIG=/etc/drift/llm.config.json。
+      LLM_ROUTES_CONFIG: ${LLM_ROUTES_CONFIG:-}
+      # 配置 provider 的 API key（apiKeyEnv 指向的变量本体），经宿主 .env 注入。
+      CBC_PROXY_API_KEY: ${CBC_PROXY_API_KEY:-}
       EXPORT_ARTIFACTS_DIR: /var/lib/drift/exports
     volumes:
       # 导出文件（PRIV-04）。命名卷而不是 bind mount —— Plan 11 Task 3 的 7 天
       # TTL 清理作用于它，而一个宿主路径会让「清理范围」取决于部署者怎么挂。
       - export-artifacts:/var/lib/drift/exports
+      # llm.config.json 只读挂载；默认 /dev/null 占位（env 未设置时进程根本不读它）。
+      - ${LLM_ROUTES_CONFIG_FILE:-/dev/null}:/etc/drift/llm.config.json:ro
+    # Linux 下让容器能用 host.docker.internal 访问宿主上的本地模型代理。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       # 绑定地址可配置，默认仅回环。本阶段处理敏感个人信息，监听所有网卡会扩大
       # 暴露面，因此默认值不是 0.0.0.0；本机试玩需要外部访问时用 API_BIND 显式放开。

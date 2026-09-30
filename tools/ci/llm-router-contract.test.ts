@@ -10,25 +10,37 @@
 // routes 参数就是为此存在的。
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { aliasResolvedEvent } from '../../packages/llm/src/events.ts';
+import {
+  clearLlmConfigForTests,
+  parseLlmConfig,
+  reloadLlmConfigForTests,
+  routeOverrides,
+} from '../../packages/llm/src/config.ts';
 import {
   ALLOWED_LLM_HOSTS,
   DENIED_LLM_HOSTS,
   hostOf,
+  isLoopbackHost,
   MOCK_HOST_SENTINEL,
+  registerConfiguredHosts,
+  resetConfiguredHostsForTests,
   SYNTHETIC_ONLY_HOSTS,
 } from '../../packages/llm/src/hosts.ts';
 import { PINNABLE, pinnabilityOf } from '../../packages/llm/src/pinnability.ts';
 import { mockProvider } from '../../packages/llm/src/providers/mock.ts';
 import {
   boundariesForModel,
+  BUILTIN_ROUTES,
   classifyHost,
+  mergeRouteTable,
   priceTierFor,
   ROUTES,
   type RouteConfig,
@@ -383,5 +395,195 @@ describe('resolved_model 日 diff：告警本身不是空真的', () => {
     const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
     expect(run.status, output).not.toBe(0);
     expect(output).not.toContain('OK no model drift');
+  });
+});
+
+describe('配置驱动的模型服务（llm.config.json）', () => {
+  /** reload 走真实 env + 文件读取路径 —— mkdtemp 临时目录由 OS 清理，用例间互不污染。 */
+  function writeTempConfig(name: string, data: unknown): string {
+    const dir = mkdtempSync(join(tmpdir(), 'drift-llm-config-'));
+    const path = join(dir, name);
+    writeFileSync(path, JSON.stringify(data), 'utf8');
+    return path;
+  }
+
+  afterEach(() => {
+    clearLlmConfigForTests();
+  });
+
+  const localProxy = {
+    api: 'openai-compatible',
+    baseUrl: 'http://127.0.0.1:9090/v1',
+    apiKeyEnv: 'LOCAL_PROXY_API_KEY',
+    models: {
+      'glm-4.7': { pinnability: 'snapshot' },
+      'qwen3-max': { pinnability: 'snapshot' },
+    },
+  };
+
+  // model 引用一律走变量而不是字符串字面量 —— PLAT-06 的 AST 禁令拦的就是字面量
+  // 写法（「谁在源码里写死了一个模型」应当显式可见），变量引用与生产代码同形态。
+  const REPLY_MODEL = 'local-proxy/glm-4.7';
+  const CLASSIFY_MODEL = 'local-proxy/qwen3-max';
+  const SNAP_MODEL = 'p/m-snap';
+  const ALIAS_MODEL = 'p/m-alias';
+  const BUILTIN_REF_FOR_NEGATIVE_CASE = 'volcengine/doubao-seed-character-251128';
+  const UNDECLARED_MODEL_REF = 'local-proxy/never-declared';
+
+  it('回环 host：任意端口 / IPv6 字面量都识别；非回环不冒充分类', () => {
+    expect(isLoopbackHost('127.0.0.1:9090')).toBe(true);
+    expect(isLoopbackHost('127.0.0.1')).toBe(true);
+    expect(isLoopbackHost('localhost')).toBe(true);
+    expect(isLoopbackHost('localhost:3000')).toBe(true);
+    expect(isLoopbackHost('[::1]:8080')).toBe(true);
+    expect(isLoopbackHost('example.com:9090')).toBe(false);
+    expect(isLoopbackHost('10.0.0.1:9090')).toBe(false);
+    expect(classifyHost('127.0.0.1:9090')).toBe('loopback');
+    // host.docker.internal 不是回环 —— 容器里指向宿主的地址，仍需经配置注册才放行。
+    expect(classifyHost('host.docker.internal:9090')).toBe('unlisted');
+  });
+
+  it('registerConfiguredHosts：网关 host 拒绝注册；冻结后二次注册 ⇒ 抛错', () => {
+    expect(() => registerConfiguredHosts(['openrouter.ai'])).toThrow(/网关/);
+    registerConfiguredHosts(['proxy.internal:9090']);
+    // 配置声明的 host 是独立类别（configured），不算境内白名单成员 —— 两者语义不同：
+    // domestic 是厂商直连端点，configured 是部署者显式声明的服务边界。
+    expect(classifyHost('proxy.internal:9090')).toBe('configured');
+    expect(() => registerConfiguredHosts(['another.internal'])).toThrow(/冻结|篡改/);
+    resetConfiguredHostsForTests();
+  });
+
+  it('合法配置解析：model 引用被解析成 provider/modelSnapshot/baseURL 三位一体', () => {
+    const parsed = parseLlmConfig({
+      providers: { 'local-proxy': localProxy },
+      routes: { 'chat.reply': { model: REPLY_MODEL, enabled: true } },
+    });
+    const override = parsed.routes['chat.reply'];
+    expect(override?.provider).toBe('local-proxy');
+    expect(override?.modelSnapshot).toBe('glm-4.7');
+    expect(override?.baseURL).toBe('http://127.0.0.1:9090/v1');
+    expect(override?.enabled).toBe(true);
+  });
+
+  it('mergeRouteTable：未覆盖的角色逐字保留内置路由；覆盖的字段级生效', () => {
+    const parsed = parseLlmConfig({
+      providers: { 'local-proxy': localProxy },
+      routes: { 'chat.reply': { model: REPLY_MODEL, temperature: 0.5, enabled: true } },
+    });
+    const merged = mergeRouteTable(BUILTIN_ROUTES, parsed.routes);
+    expect(merged['chat.reply'].provider).toBe('local-proxy');
+    expect(merged['chat.reply'].modelSnapshot).toBe('glm-4.7');
+    expect(merged['chat.reply'].baseURL).toBe('http://127.0.0.1:9090/v1');
+    expect(merged['chat.reply'].temperature).toBe(0.5);
+    // 未覆盖字段保留内置值 —— 「想保留内置路由就不写这个角色」的合并语义。
+    expect(merged['chat.reply'].maxOutputTokens).toBe(BUILTIN_ROUTES['chat.reply'].maxOutputTokens);
+    expect(merged['safety.classify']).toEqual(BUILTIN_ROUTES['safety.classify']);
+  });
+
+  it('模型缺 pinnability ⇒ 抛错（未登记不得默认成 snapshot）', () => {
+    expect(() =>
+      parseLlmConfig({
+        providers: {
+          p: { ...localProxy, models: { 'm1': {} } },
+        },
+      }),
+    ).toThrow(/pinnability/);
+  });
+
+  it('model 引用未声明的 provider / 未登记的模型 ⇒ 抛错', () => {
+    expect(() =>
+      parseLlmConfig({
+        providers: { 'local-proxy': localProxy },
+        routes: { 'chat.reply': { model: BUILTIN_REF_FOR_NEGATIVE_CASE } },
+      }),
+    ).toThrow(/没有在 providers 里声明/);
+    expect(() =>
+      parseLlmConfig({
+        providers: { 'local-proxy': localProxy },
+        routes: { 'chat.reply': { model: UNDECLARED_MODEL_REF } },
+      }),
+    ).toThrow(/没有登记/);
+  });
+
+  it('配置 provider id 与内置名冲突 ⇒ 抛错（那是厂商直连的登记名）', () => {
+    expect(() => parseLlmConfig({ providers: { zhipu: localProxy } })).toThrow(/冲突/);
+  });
+
+  it('SAFE-02 放宽的边界：两个角色同走一个配置 provider 且模型不同 ⇒ 断言通过', () => {
+    const path = writeTempConfig('safe02-pass.json', {
+      providers: { 'local-proxy': localProxy },
+      routes: {
+        'chat.reply': { model: REPLY_MODEL, enabled: true },
+        'safety.classify': { model: CLASSIFY_MODEL, enabled: true },
+      },
+    });
+    reloadLlmConfigForTests(path);
+    const merged = mergeRouteTable(BUILTIN_ROUTES, routeOverrides());
+    expect(() => assertRouterInvariants(merged)).not.toThrow();
+  });
+
+  it('SAFE-02 不放宽的部分：配置 provider 之下模型相同 ⇒ 照样抛错', () => {
+    const path = writeTempConfig('safe02-fail.json', {
+      providers: { 'local-proxy': localProxy },
+      routes: {
+        'chat.reply': { model: REPLY_MODEL, enabled: true },
+        'safety.classify': { model: REPLY_MODEL, enabled: true },
+      },
+    });
+    reloadLlmConfigForTests(path);
+    const merged = mergeRouteTable(BUILTIN_ROUTES, routeOverrides());
+    expect(() => assertRouterInvariants(merged)).toThrow(/SAFE-02/);
+  });
+
+  it('SAFE-02 不放宽的部分：内置厂商与配置 provider 混用时同 provider ⇒ 照样抛错', () => {
+    const path = writeTempConfig('builtin-provider.json', {
+      providers: { 'local-proxy': localProxy },
+      routes: { 'chat.reply': { model: REPLY_MODEL, enabled: true } },
+    });
+    reloadLlmConfigForTests(path);
+    const merged = mergeRouteTable(BUILTIN_ROUTES, routeOverrides());
+    // classify 保留内置 zhipu、reply 已是配置 provider —— 两侧不同，通过；
+    // 改坏副本：把 reply 的 provider 换回内置 zhipu ⇒ 同厂商检查照常生效。
+    expect(() => assertRouterInvariants(merged)).not.toThrow();
+    expect(() =>
+      assertRouterInvariants({
+        ...merged,
+        'chat.reply': { ...merged['chat.reply'], provider: 'zhipu' },
+      }),
+    ).toThrow(/同一个厂商/);
+  });
+
+  it('配置模型的可 pin 性可查；alias-only 模型仍要 waiver', () => {
+    const path = writeTempConfig('pinnability.json', {
+      providers: {
+        p: {
+          ...localProxy,
+          models: { 'm-snap': { pinnability: 'snapshot' }, 'm-alias': { pinnability: 'alias-only' } },
+        },
+      },
+      routes: { 'memory.extract': { model: SNAP_MODEL, enabled: true } },
+    });
+    reloadLlmConfigForTests(path);
+    expect(pinnabilityOf('m-snap')).toBe('snapshot');
+    expect(pinnabilityOf('m-alias')).toBe('alias-only');
+    expect(pinnabilityOf('从未登记的模型')).toBeUndefined();
+    // alias-only 走 routed 必须 waiver：配置未写 ⇒ 合并产物断言炸。
+    const aliasPath = writeTempConfig('pinnability-waiver.json', {
+      providers: {
+        p: { ...localProxy, models: { 'm-alias': { pinnability: 'alias-only' } } },
+      },
+      routes: { 'memory.extract': { model: ALIAS_MODEL, enabled: true } },
+    });
+    reloadLlmConfigForTests(aliasPath);
+    const merged = mergeRouteTable(BUILTIN_ROUTES, routeOverrides());
+    expect(() => assertRouterInvariants(merged)).toThrow(/aliasOnlyWaiver/);
+  });
+
+  it('配置文件不可读 / 非 JSON ⇒ 抛错，而不是静默回退内置路由', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'drift-llm-config-'));
+    expect(() => reloadLlmConfigForTests(join(dir, 'no-such-file.json'))).toThrow(/读取失败/);
+    const badJson = join(dir, 'bad.json');
+    writeFileSync(badJson, '{not json', 'utf8');
+    expect(() => reloadLlmConfigForTests(badJson)).toThrow(/合法 JSON/);
   });
 });

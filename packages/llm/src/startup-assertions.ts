@@ -10,6 +10,7 @@
 // 失败的启动断言与一条不存在的断言没有区别，而它还会提供虚假的安全感。
 
 import { classifyHost, ROUTES, type RouteConfig } from './routes.ts';
+import { isConfiguredProviderId } from './config.ts';
 import { ALLOWED_LLM_HOSTS, DENIED_LLM_HOSTS, hostOf, SYNTHETIC_ONLY_HOSTS } from './hosts.ts';
 import { pinnabilityOf } from './pinnability.ts';
 import { PINNED_ONLY_ROLES, SEMANTIC_ROLES, type SemanticRole } from './types.ts';
@@ -36,6 +37,24 @@ function assertRolesComplete(routes: RouteTable): void {
   }
 }
 
+/**
+ * SAFE-02「不同厂商」要求在自定义 provider（llm.config.json 注入）场景下的放宽判定。
+ *
+ * 内置厂商（volcengine / zhipu / …）的分离要求**不变** —— 一次厂商侧故障不应同时
+ * 打掉角色层与安全层。自定义 provider（本地代理、云厂商兼容端点）背后是**部署者
+ * 自己控制的模型集合**：chat.reply 与 safety.classify 同走一个自定义 provider 时，
+ * 分离语义由「不同模型」（assertModelSeparation 的第一条断言，不放宽）承担。
+ * 这是部署者在配置文件里的显式选择，不是静默豁免 —— 所以仅当两个 provider 都是
+ * 配置注入的 id 时才放行；任何一侧是内置厂商都照常抛错。
+ */
+function safe02ProviderWaiver(replyProvider: string, classifyProvider: string): boolean {
+  return (
+    replyProvider === classifyProvider &&
+    isConfiguredProviderId(replyProvider) &&
+    isConfiguredProviderId(classifyProvider)
+  );
+}
+
 /** 断言 1：模型分离（SAFE-02）。 */
 function assertModelSeparation(routes: RouteTable): void {
   const reply = routes['chat.reply'];
@@ -52,7 +71,7 @@ function assertModelSeparation(routes: RouteTable): void {
       `SAFE-02 违反：safety.classify 与 chat.reply.frontier 用了同一个模型（${classify.modelSnapshot}）。`,
     );
   }
-  if (classify.provider === reply.provider) {
+  if (classify.provider === reply.provider && !safe02ProviderWaiver(reply.provider, classify.provider)) {
     throw new Error(
       `SAFE-02 违反：safety.classify 与 chat.reply 用了同一个厂商（${classify.provider}）。不同厂商是硬要求 —— 一次厂商侧故障不应同时打掉角色层与安全层。`,
     );
@@ -131,6 +150,10 @@ function assertHosts(routes: RouteTable): void {
         `${FRONTIER_ROLE} 的 baseURL host ${host} 落在境内白名单里。这条通道的定义就是境外；把它指向境内 host 会让「境外通道只接受合成文本」这条约束失去被检查的对象。`,
       );
     }
+    // loopback（回环）与 configured（配置声明的宿主代理，如 docker 网桥 IP）对
+    // **任何**角色放行，frontier 也不例外：两者都是部署者显式控制的服务边界，不是
+    // 公网上的可猜测域名，「真实对话出境」的威胁模型对它们不成立；frontier 通道的
+    // 类型层防线（只接受 SyntheticText）与通道指向无关，照常成立。
   }
 }
 

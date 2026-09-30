@@ -24,6 +24,27 @@ export const CONTACT_FORMAT_ERROR =
 export const REGISTER_SUBMIT_ERROR =
   '注册没有完成 —— 网络中断或服务器暂时没有响应。你填的内容都还在，点「重试提交」再试一次。';
 
+/**
+ * 注册提交失败的**细分**文案 —— 服务端把 better-auth 的 APIError 按 body.code 拆成
+ * 独立错误码（apps/api/src/modules/auth/routes.ts），前端按码给出可执行的下一步。
+ * 兜底仍是 REGISTER_SUBMIT_ERROR：拿不到细分码（真网络断、未知错误）时显示它。
+ *
+ * 2026-09-30 之前的实现只有兜底一条 —— 「邮箱已注册」被渲染成网络中断，误导排查。
+ */
+export const REGISTER_EMAIL_USED_ERROR =
+  '这个邮箱已经注册过账号 —— 请换一个邮箱再试（同一邮箱无法重复注册）。';
+
+export const REGISTER_PASSWORD_POLICY_ERROR =
+  '注册没有完成 —— 密码未通过服务端安全策略（至少 8 位）。调整后再点「重试提交」。';
+
+/** 按服务端错误码选提交失败文案。code 为 null / 未知码 ⇒ 兜底。纯函数，测试直接喂。 */
+export function registerSubmitErrorCopy(code: string | null): string {
+  if (code === 'email_already_used') return REGISTER_EMAIL_USED_ERROR;
+  if (code === 'password_policy') return REGISTER_PASSWORD_POLICY_ERROR;
+  return REGISTER_SUBMIT_ERROR;
+}
+
+
 export const REGISTER_RETRY_LABEL = '重试提交';
 
 /**

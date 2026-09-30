@@ -12,3 +12,7 @@ var/export-artifacts/
 # 产生无意义的 diff，并让「这次改动到底改了什么」变难读。
 .gsd/
 .planning/milestone.lock
+
+# 部署者的模型服务配置（llm.config.json，可能含内网地址与本地端口）。
+# 模板见 llm.config.example.json；路径经 LLM_ROUTES_CONFIG 环境变量传给进程。
+llm.config.json

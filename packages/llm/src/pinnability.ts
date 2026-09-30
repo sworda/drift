@@ -11,6 +11,7 @@
 // 可以用（Q4 的裁决），但必须在 routes.ts 里写下一条 aliasOnlyWaiver 理由，并由
 // resolved_model 日 diff 告警补偿。
 
+import { configuredPinnabilityOf } from './config.ts';
 import type { ModelSnapshot, Pinnability } from './types.ts';
 
 export const PINNABLE = {
@@ -34,9 +35,13 @@ export const PINNABLE = {
 /**
  * 查某个模型的可 pin 性。
  *
- * 未登记的模型返回 `undefined`，调用方必须把它当失败处理 —— **不得**默认成
- * snapshot。默认成 snapshot 等于让一个没人核实过的模型直接进 pinned 路径。
+ * 查找顺序：内置表 PINNABLE → 配置文件声明的模型（config.ts，启动时已强制
+ * 显式登记 pinnability）。两边都未登记的模型返回 `undefined`，调用方必须把它
+ * 当失败处理 —— **不得**默认成 snapshot。默认成 snapshot 等于让一个没人核实过
+ * 的模型直接进 pinned 路径；配置模型少写 pinnability 字段在解析阶段就炸了。
  */
 export function pinnabilityOf(model: string): Pinnability | undefined {
-  return (PINNABLE as Readonly<Record<string, Pinnability>>)[model];
+  const builtin = (PINNABLE as Readonly<Record<string, Pinnability>>)[model];
+  if (builtin !== undefined) return builtin;
+  return configuredPinnabilityOf(model);
 }

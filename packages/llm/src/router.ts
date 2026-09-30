@@ -21,6 +21,7 @@ import { inputHash } from '@drift/prompts';
 
 import { llmCall, type Executor, type LlmPurpose } from '@drift/db';
 
+import { configuredProviderOfModel } from './config.ts';
 import { aliasResolvedEvent, emitLlmEvent } from './events.ts';
 import { pinnabilityOf } from './pinnability.ts';
 import { resolveProvider } from './providers/index.ts';
@@ -233,5 +234,7 @@ export async function callFrontier(
 
 /** 供启动自检与测试读取：某个 snapshot 声明归属哪个厂商。 */
 export function declaredProviderOf(modelSnapshot: string): ProviderName | undefined {
-  return MODELS[modelSnapshot as keyof typeof MODELS]?.provider;
+  const builtin = MODELS[modelSnapshot as keyof typeof MODELS]?.provider;
+  if (builtin !== undefined) return builtin;
+  return configuredProviderOfModel(modelSnapshot);
 }

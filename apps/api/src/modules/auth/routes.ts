@@ -14,6 +14,7 @@
 //  3. **响应体里没有明文联系方式。** 只回 maskedContact（138****1234）。
 //     tests/integration/register.test.ts 的 (e) 断言整个响应体不含 11 位连续数字。
 
+import { APIError } from 'better-auth/api';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -89,7 +90,33 @@ authRoutes.post('/auth/register', async (c) => {
     if (error instanceof ContactFormatError) {
       return c.json({ error: 'contact_format_invalid' }, 400);
     }
-    // 唯一约束（同一邮箱重复注册）与 better-auth 自己的 APIError 都走这里 —— 409 而不是 500。
+    // better-auth 自己抛的 APIError 按 body.code 细分 —— 「邮箱已注册」和「密码不符
+    // 策略」是可以让用户自己修正的失败，混进一个笼统的 register_failed 会让前端只能
+    // 显示「网络中断」级别的兜底文案（2026-09-30 实测：重复邮箱被渲染成网络错误，
+    // 排查走了弯路）。细分码与 UI 的文案映射一一对应（onboarding/copy.ts）。
+    if (error instanceof APIError) {
+      const authCode =
+        typeof error.body === 'object' && error.body !== null
+          ? (error.body as { code?: string }).code
+          : undefined;
+      // 诊断日志：status 与 body.code 都是枚举/数字，不是文本（errorCode 在白名单里）。
+      // better-auth 按 patch version 会改错误的形状 —— 这一行让「细分没命中」当场可见。
+      logEvent('auth.register_api_error', {
+        route: '/auth/register',
+        statusCode: error.status,
+        errorCode: authCode ?? 'status_' + String(error.status),
+      }, 'warn');
+      if (authCode?.startsWith('USER_ALREADY_EXISTS') || String(error.status) === 'UNPROCESSABLE_ENTITY') {
+        logEvent('auth.register_rejected_email_used', { route: '/auth/register', statusCode: 409 }, 'warn');
+        return c.json({ error: 'email_already_used' }, 409);
+      }
+      if (authCode === 'PASSWORD_TOO_SHORT' || authCode === 'PASSWORD_TOO_LONG') {
+        logEvent('auth.register_rejected_password', { route: '/auth/register', statusCode: 409 }, 'warn');
+        return c.json({ error: 'password_policy' }, 409);
+      }
+    }
+    // 其余（唯一约束兜底、未知 better-auth 错误、库层故障）仍走笼统 409 —— 日志里有
+    // 原始错误，前端给可重试的兜底文案。
     logError('auth.register_failed', error, { route: '/auth/register' });
     return c.json({ error: 'register_failed' }, 409);
   }
