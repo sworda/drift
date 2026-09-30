@@ -2,12 +2,11 @@
 gsd_state_version: "1.0"
 current_phase: 2
 current_phase_name: 拟真对话基线 + 探针与指标
-status: planning
+status: "Phase 01 shipped — PR #1"
 stopped_at: Phase 01 complete, ready to plan Phase 2
-last_updated: "2026-09-30T11:48:43.706Z"
+last_updated: "2026-09-30T13:19:54.498Z"
 last_activity: 2026-09-30
-last_activity_desc: Phase 01 complete, transitioned to Phase 2
-state_head: e7a98fca1bf797995668d4835eaf236e74d15ed5
+state_head: f9e4548ea528a7ad42a3332a813bac20058f0d75
 progress:
   total_phases: 5
   completed_phases: 1
@@ -29,8 +28,8 @@ See: .planning/PROJECT.md (updated 2026-09-25)
 
 Phase: 2 — 拟真对话基线 + 探针与指标
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-09-30 — Phase 01 complete, transitioned to Phase 2
+Status: Phase 01 shipped — PR #1
+Last activity: 2026-09-30
 
 Progress: [██░░░░░░░░] 20%
 
