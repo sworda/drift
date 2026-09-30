@@ -3,7 +3,7 @@ status: complete
 phase: 01-compliance-safety-chat-skeleton
 source: [01-01-SUMMARY.md, 01-02-SUMMARY.md, 01-03-SUMMARY.md, 01-04-SUMMARY.md, 01-05-SUMMARY.md, 01-06-SUMMARY.md, 01-07-SUMMARY.md, 01-08-SUMMARY.md, 01-09-SUMMARY.md, 01-10-SUMMARY.md, 01-11-SUMMARY.md, 01-12-SUMMARY.md, 01-13-SUMMARY.md, 01-14-SUMMARY.md, 01-15-SUMMARY.md]
 started: 2026-09-29T00:00:00Z
-updated: 2026-09-30T00:00:00Z
+updated: 2026-09-30T12:00:00Z
 ---
 
 ## Current Test
@@ -237,4 +237,7 @@ blocked: 0
 
 - test: 38
   idea: "用户报告『一堆 bug，无法正常聊天』——聊天链路缺陷待登录流程完成后修复并重做走查（测试 17/18/19/22/23/26/27/38 全部顺延）"
+  deferred_at: 2026-09-30
+- test: 19
+  idea: "用户实测『感觉活着好没意思啊』被判为 elevated（非 crisis），企微通知不触发（设计上只挂 crisis）；crisis 判定召回与否属探针测试 18/22 范畴，待补测时用真实探针集验证 gpt-6-luna 的召回率"
   deferred_at: 2026-09-30
