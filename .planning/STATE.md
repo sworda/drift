@@ -4,10 +4,10 @@ current_phase: 2
 current_phase_name: 拟真对话基线 + 探针与指标
 status: planning
 stopped_at: Phase 01 complete, ready to plan Phase 2
-last_updated: "2026-09-29T12:38:07.112Z"
-last_activity: 2026-09-29
+last_updated: "2026-09-30T11:48:43.706Z"
+last_activity: 2026-09-30
 last_activity_desc: Phase 01 complete, transitioned to Phase 2
-state_head: 4a04aa0ed8033ecde48382b72de21080f5577c64
+state_head: e7a98fca1bf797995668d4835eaf236e74d15ed5
 progress:
   total_phases: 5
   completed_phases: 1
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-25)
 
 **Core value:** 角色必须让人感觉是活的 —— 有自己的状态与生活、会记得也会遗忘、会因为和你相处而真的发生改变。
-**Current focus:** Phase 01 — 合规安全地基 + 会话骨架
+**Current focus:** Phase 02 — 拟真对话基线 + 探针与指标
 
 ## Current Position
 
 Phase: 2 — 拟真对话基线 + 探针与指标
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-09-29 — Phase 01 complete, transitioned to Phase 2
+Last activity: 2026-09-30 — Phase 01 complete, transitioned to Phase 2
 
 Progress: [██░░░░░░░░] 20%
 
