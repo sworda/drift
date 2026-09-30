@@ -1,0 +1,50 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "tools/ci/**/*.ts",
+    "tests/**/*.ts",
+    "eslint.config.js",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/dist",
+    "tools/ci/fixtures/**",
+    "tools/ci/type-fixtures/**"
+  ],
+  "references": [
+    {
+      "path": "./packages/contract"
+    },
+    {
+      "path": "./packages/db"
+    },
+    {
+      "path": "./packages/llm"
+    },
+    {
+      "path": "./packages/safety"
+    },
+    {
+      "path": "./packages/prompts"
+    },
+    {
+      "path": "./apps/api"
+    },
+    {
+      "path": "./apps/web/tsconfig.typecheck.json"
+    }
+  ]
+}

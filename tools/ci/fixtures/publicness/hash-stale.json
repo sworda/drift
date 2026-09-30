@@ -1,0 +1,9 @@
+{
+  "_fixture": "坏样例 1：四项状态已改（monetized 从 false 变成 true）而 acknowledged_hash 还是改之前那一份。这是 D-08 要抓的第一种绕过：改了状态、忘了（或跳过了）签字。HASH_MATCHES 必须对它失败。",
+  "public_signup_entrance": false,
+  "app_store_listed": false,
+  "registered_users": 0,
+  "monetized": true,
+  "acknowledged_hash": "sha256:724dab6c1a808df1d04e208dd9948150b445d1e3315762bfd5a1b2b7d187945e",
+  "acknowledged_checklist": "compliance/CHECKLIST-2026-09-27.md"
+}

@@ -1,0 +1,11 @@
+packages:
+  - 'packages/*'
+  - 'apps/*'
+# pnpm 12 的供应链策略：带 postinstall 的包必须逐个显式放行，否则 install 直接失败
+# （实测：留着 pnpm 自动写入的占位串会让 `pnpm install --frozen-lockfile` 静默退出 1）。
+# esbuild 是 drizzle-kit 加载 drizzle.config.ts 的编译器，其 install 脚本只做平台
+# 二进制的落位。不放行它 = drizzle-kit 不可用 = Plan 04 起没有迁移工具。
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - '@types/node@24.19.0'

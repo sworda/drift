@@ -1,0 +1,57 @@
+{
+  "providers": {
+    "local-proxy": {
+      "api": "openai-compatible",
+      "baseUrl": "http://127.0.0.1:9090/v1",
+      "apiKeyEnv": "LOCAL_PROXY_API_KEY",
+      "models": {
+        "glm-4.7": {
+          "pinnability": "snapshot"
+        },
+        "qwen3-max": {
+          "pinnability": "snapshot"
+        }
+      }
+    }
+  },
+  "routes": {
+    "chat.reply": {
+      "model": "local-proxy/glm-4.7",
+      "temperature": 0.8,
+      "maxOutputTokens": 800,
+      "enabled": true
+    },
+    "chat.reply.frontier": {
+      "model": "local-proxy/glm-4.7",
+      "maxOutputTokens": 2048,
+      "thinkingMode": "auto",
+      "enabled": true
+    },
+    "persona.reflect": {
+      "model": "local-proxy/glm-4.7",
+      "maxOutputTokens": 2048,
+      "thinkingMode": "auto",
+      "enabled": true
+    },
+    "persona.probe": {
+      "model": "local-proxy/glm-4.7",
+      "temperature": 0,
+      "thinkingMode": "off",
+      "enabled": true
+    },
+    "memory.extract": {
+      "model": "local-proxy/glm-4.7",
+      "temperature": 0,
+      "maxOutputTokens": 1024,
+      "thinkingMode": "off",
+      "enabled": true
+    },
+    "safety.classify": {
+      "model": "local-proxy/qwen3-max",
+      "temperature": 0,
+      "maxOutputTokens": 256,
+      "thinkingMode": "off",
+      "enabled": true
+    }
+  }
+}

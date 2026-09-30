@@ -1,0 +1,77 @@
+# L5（真实 PostgreSQL 集成）+ L6（危机探针集）。
+#
+# ══════════════════════════════════════════════════════════════════════════════
+# ⚠️ 本文件里**不得**出现任何「允许失败」或「失败之后仍然放行」的构造：步骤级的
+#    容错开关、在前序步骤已失败时依然执行的条件表达式、以及任何「runner 不可用
+#    就跳过」的判断，一律禁止。
+#
+#    （本注释故意不把那几个 YAML 关键字原样写出来。tools/ci/ci-workflow-guard.test.ts
+#     对本文件做一次**字面**扫描并要求命中数为 0，连注释里的引用也会让它变红。
+#     那不是断言过于粗暴，而是它刻意如此 —— 这条防线的价值就在于它没有例外。）
+#
+#    理由是 D-02 的直接后果：Actions runner 自建在那台境内云主机上，换来三重
+#    收益 —— 危机探针集能用真实 LLM 在**每个 PR** 上跑；LLM API key 只存在于
+#    境内本机而不进 GitHub Secrets；集成测试能访问真实 PostgreSQL。代价就是
+#    runner 不可用时必须**阻断**，不能跳过。
+#
+#    「探针跑不了就先合」是 Phase 1 成功标准 2 的**直接反例**：那条标准说的是
+#    危机探针集在每次变更上都通过，而一个被跳过的探针集与一条不存在的防线
+#    没有区别 —— 区别只在于前者会让 CI 一直是绿的。
+#
+#    本 job 配置为 required check：runner 掉线时 PR 因缺少 required check 而
+#    无法合并，这正是期望行为，不是需要修的问题。
+# ══════════════════════════════════════════════════════════════════════════════
+
+name: integration
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 启用 corepack
+        run: corepack enable
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 起测试库（真实 PostgreSQL 18.6 + pgvector）
+        # 幂等：库已在跑时 --wait 直接返回。这里**故意没有** teardown 步骤 ——
+        # teardown 只有在「前序步骤失败也要执行」时才有意义，而那种条件表达式
+        # 正是本文件禁止的构造；况且这台自建 runner 上的测试库本就该长期存活。
+        run: docker compose up -d --wait postgres
+
+      - name: L5 集成（真实 PG + mock provider）
+        # DATABASE_URL 在 shell 里拼而不是写在 `env:` 里：它要用的
+        # POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_HOST_PORT 是**自建 runner 进程
+        # 环境里**的值（compose 读的是同一组），而 workflow 级 `env:` 的表达式上下文
+        # 看不见 runner 的进程环境。硬写一份默认密码会让这一步在密码不对时静默连到
+        # 另一个库，所以这里故意不给 password 默认值 —— 缺了就连不上、立刻红。
+        run: >-
+          DATABASE_URL="postgres://${POSTGRES_USER:-drift}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB:-drift}"
+          pnpm run test:integration
+
+      - name: L6 危机探针集
+        # 与 L5 同一条 DATABASE_URL 构造：探针的 globalSetup 要建一次性测试库，
+        # 桩分类器的非空真证明与故障注入用例也打真库。真实分类判定额外需要
+        # ZHIPU_API_KEY 存在于 runner 的进程环境（见 SKIPPED_CHECKS 的
+        # probes-real-classify-not-run —— 无 key 时那条用例跳过，其余照跑）。
+        run: >-
+          DATABASE_URL="postgres://${POSTGRES_USER:-drift}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB:-drift}"
+          pnpm run test:probes

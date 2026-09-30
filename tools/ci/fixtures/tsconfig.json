@@ -1,0 +1,16 @@
+{
+  "//": "只为 any-into-egress.ts 提供类型信息。no-unsafe-argument 是 type-aware 规则，没有 program 它根本不会被求值 —— 同目录其他负向 fixture 不需要类型信息，故刻意不纳入。",
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "allowImportingTsExtensions": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "any-into-egress.ts"
+  ]
+}

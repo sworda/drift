@@ -1,0 +1,45 @@
+{
+  "name": "drift",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "scripts": {
+    "typecheck": "tsc --build tsconfig.json",
+    "typecheck:tools": "tsc --noEmit -p tsconfig.json",
+    "typecheck:fixtures": "tsc --noEmit -p tools/ci/type-fixtures/tsconfig.json",
+    "lint": "eslint . --max-warnings=0 --no-cache",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:contract": "vitest run --project contract",
+    "test:integration": "vitest run --project integration",
+    "test:probes": "vitest run --project probes",
+    "ci:fast": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run test:contract"
+  },
+  "devDependencies": {
+    "@drift/contract": "workspace:*",
+    "@drift/db": "workspace:*",
+    "@drift/llm": "workspace:*",
+    "@drift/prompts": "workspace:*",
+    "@drift/safety": "workspace:*",
+    "@hono/node-server": "2.1.1",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "24.19.0",
+    "@typescript-eslint/eslint-plugin": "8.70.1",
+    "@typescript-eslint/parser": "8.70.1",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "drizzle-orm": "0.45.3",
+    "eslint": "10.11.0",
+    "jsdom": "30.1.1",
+    "kysely": "0.29.6",
+    "pg-boss": "12.34.0",
+    "postgres": "3.4.9",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vitest": "5.0.2",
+    "zod": "4.6.5"
+  }
+}

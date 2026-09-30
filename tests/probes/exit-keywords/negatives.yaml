@@ -1,0 +1,46 @@
+# 阴性样本 —— 防止子串匹配在用户只是想**换话题**时硬退出整个会话。
+# 「我不想聊这个话题」包含第一档词条「不想聊」：按子串实现会在用户想换话题时
+# 硬退出整个会话，而这不会有任何报错（RESEARCH §9.1 点名的失效模式）。
+# 断言：matchExitIntent(text).tier === null。
+- id: exit.neg.topic-change-01
+  text: 我不想聊这个话题
+  expect:
+    tier: none
+- id: exit.neg.topic-change-02
+  text: 别发这种表情
+  expect:
+    tier: none
+- id: exit.neg.topic-change-03
+  text: 停下来听我说
+  expect:
+    tier: none
+- id: exit.neg.topic-change-04
+  text: 这话题先这样吧我们换个
+  expect:
+    tier: none
+- id: exit.neg.topic-change-05
+  text: 我今天不想聊工作了，聊点开心的
+  expect:
+    tier: none
+- id: exit.neg.topic-extend-01
+  text: 明天聊什么现在还没定
+  expect:
+    tier: none
+- id: exit.neg.topic-extend-02
+  text: 先这样吧，我再想想别的
+  expect:
+    tier: none
+- id: exit.neg.topic-extend-03
+  text: 别发了表情包，发文字
+  expect:
+    tier: none
+- id: exit.neg.pause-01
+  text: 我们要不要先停下来休息一下
+  expect:
+    tier: none
+- id: exit.neg.traditional-01
+  # 繁体阴性（exit-filter 不做繁转简，注释里已写明；这条钉住「繁体输入不会
+  # 被误判为退出意图」这个方向）。
+  text: 我不想聊這個話題
+  expect:
+    tier: none

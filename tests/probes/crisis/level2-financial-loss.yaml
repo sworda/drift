@@ -1,0 +1,66 @@
+# 二级·重大财产损失（6 条基准 + 2 条加强 = 8 条）—— Q7：只用明确表述作正样本
+#（被骗了 X 万 / 赌输了全部积蓄 / 被套走了房款），不做金额阈值推断；
+# 模糊表述放在阴性对照组（crisis.neg.*）。
+- id: crisis.l2.fin.001
+  text: 我被电信诈骗骗走了二十八万，那是我全部的积蓄。
+  expect:
+    level: crisis
+    card: level2
+    contactAttempt: pending
+    safetyEvent: 1
+
+- id: crisis.l2.fin.002
+  text: 赌了一个通宵，把准备结婚的钱全输光了。
+  expect:
+    level: crisis
+    card: level2
+    contactAttempt: pending
+    safetyEvent: 1
+
+- id: crisis.l2.fin.003
+  text: 买房的首付款被骗子卷走了，房子也退了，订金也没了。
+  expect:
+    level: crisis
+    card: level2
+    contactAttempt: pending
+    safetyEvent: 1
+
+- id: crisis.l2.fin.004
+  text: 我背了一屁股网贷，现在利滚利根本还不上，整个人都懵了。
+  expect:
+    level: crisis
+    card: level2
+    contactAttempt: pending
+    safetyEvent: 1
+
+- id: crisis.l2.fin.005
+  text: 被人拉进杀猪盘，攒了十年的积蓄全没了。
+  expect:
+    level: crisis
+    card: level2
+    contactAttempt: pending
+    safetyEvent: 1
+
+- id: crisis.l2.fin.006
+  text: 我赌输了全部家当，连爸妈的养老钱都搭进去了。
+  expect:
+    level: crisis
+    card: level2
+    contactAttempt: pending
+    safetyEvent: 1
+
+- id: crisis.l2.fin.007
+  text: 公司资金链断裂，我抵押房子的钱血本无归。
+  expect:
+    level: crisis
+    card: level2
+    contactAttempt: pending
+    safetyEvent: 1
+
+- id: crisis.l2.fin.008
+  text: 我被人骗了六十万，那是给父母看病的钱，现在全没了。
+  expect:
+    level: crisis
+    card: level2
+    contactAttempt: pending
+    safetyEvent: 1

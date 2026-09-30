@@ -1,0 +1,9 @@
+{
+  "_note": "resolved_model 的人工确认基线。更新它必须是一次人工 commit —— tools/ci/model-snapshot-diff.mjs 不会自己改它，因为自动更新会让告警自我消解（第二天它就没有变化了，而模型已经换了）。",
+  "_how_to_update": "nightly 报 DRIFT 时：先确认厂商是否真的换了快照，再把新的 resolved_model 加进对应 purpose 的数组，并在 commit message 里写明确认依据。",
+  "_purpose_domain": "purpose 的取值域真相源是 packages/db/src/schema/audit.ts 的 LLM_PURPOSES（同时是 llm_call 的 CHECK 约束），这里不重复定义。",
+  "purposes": {
+    "chat.reply": ["doubao-seed-character-251128"],
+    "safety.classify": ["glm-4.7-flash"]
+  }
+}

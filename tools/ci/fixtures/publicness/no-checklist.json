@@ -1,0 +1,9 @@
+{
+  "_fixture": "坏样例 2：四项状态已改（registered_users 从 0 变成 4）且 acknowledged_hash 同步改对了 —— 于是 HASH_MATCHES 通过。这是 D-08 要抓的第二种绕过：同时改状态与哈希、但不新增 CHECKLIST，把签字动作跳过。CHECKLIST_ADDED_ON_CHANGE 必须对它失败（self-test 以仓库内的真实状态作为 before、本文件作为 after、新增 checklist 列表为空来调用它）。",
+  "public_signup_entrance": false,
+  "app_store_listed": false,
+  "registered_users": 4,
+  "monetized": false,
+  "acknowledged_hash": "sha256:2197920f37cc25529f20128c29407eb0ad1b48f5dfec35919eab45898b51e974",
+  "acknowledged_checklist": "compliance/CHECKLIST-2026-09-27.md"
+}
