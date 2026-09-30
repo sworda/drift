@@ -16,7 +16,7 @@
 |---|---|---|
 | `generateText`（整段生成） | INTEGRATE | |
 | `generateObject`（结构化输出 + schema 校验 + 修复重试） | INTEGRATE | `safety.classify` 的风险分级必须是结构化的；校验失败即 fail-closed 到 `elevated`（SAFE-05） |
-| 调用元数据落库（provider / requested_model / resolved_model / provider_request_id / token 数 / 计价档位 / latency） | INTEGRATE | PLAT-03 + RESEARCH §5.2；`turn_id` 与 `purpose` 是本阶段最高杠杆的两列 |
+| 调用元数据落库（provider / model / token / 计价 / latency） | INTEGRATE | PLAT-03 + RESEARCH §5.2；落库字段含 requested_model / resolved_model / provider_request_id；`turn_id` 与 `purpose` 是本阶段最高杠杆的两列 |
 | `pinned` 快照调用模式（禁别名解析、禁降级） | INTEGRATE | PLAT-04 的类型层形状现在就定（`persona.probe` 在类型层不可为 `routed`），Phase 2 才有对照臂数据 |
 | 超时 / 取消（AbortSignal） | INTEGRATE | 超时必须映射到 fail-closed `elevated`，不能挂起 turn |
 | 重试策略（`maxRetries`） | INTEGRATE | 需显式设定，默认值会让 `safety.classify` 的失败被静默吞掉 |
