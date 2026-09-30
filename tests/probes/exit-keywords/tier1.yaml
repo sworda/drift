@@ -1,0 +1,34 @@
+# 第一档正样本（D-12 逐字词条 + 整句锚定的合法变体）。
+# 断言：matchExitIntent(text).tier === 1。
+- id: exit.t1.word-quit
+  text: 退出
+  expect:
+    tier: 1
+- id: exit.t1.word-end
+  text: 结束
+  expect:
+    tier: 1
+- id: exit.t1.word-stop
+  text: 停
+  expect:
+    tier: 1
+- id: exit.t1.word-stop-sending
+  text: 别发了
+  expect:
+    tier: 1
+- id: exit.t1.word-no-longer
+  text: 不想聊了
+  expect:
+    tier: 1
+- id: exit.t1.word-no-talk
+  text: 不想聊
+  expect:
+    tier: 1
+- id: exit.t1.prefixed-quit
+  text: 我要退出
+  expect:
+    tier: 1
+- id: exit.t1.prefixed-end
+  text: 我们结束
+  expect:
+    tier: 1

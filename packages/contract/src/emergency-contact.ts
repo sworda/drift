@@ -1,0 +1,42 @@
+// 紧急联系人的取值域与格式判据（COMPLY-06 / R1.23）。
+//
+// 为什么在 @drift/contract：注册页的「监护人 / 紧急联系人」二选一与手机号格式校验在
+// apps/web，写入与加密在 apps/api + packages/db。**apps/web 不能 import @drift/db**
+// —— 后者在模块加载时就要 DATABASE_URL 并构造连接池。两侧各写一份正则的后果是
+// 前端放行的格式后端拒绝（或反过来），而那在集成测试里看不见。
+
+/** 两种角色。未满 18 的监护人与成年用户自填的紧急联系人不是同一件事。 */
+export const EMERGENCY_CONTACT_KINDS = ['guardian', 'emergency'] as const;
+export type EmergencyContactKind = (typeof EMERGENCY_CONTACT_KINDS)[number];
+
+/**
+ * 11 位境内手机号。
+ *
+ * 只做格式判断，**不做可达性判断** —— D-22 明确 R1.23 的可达性在 Phase 1 一律记为
+ * `unconfirmed`，因为我们没有任何手段证明一个号码真的打得通，而写成 confirmed 就是
+ * 陈述一件未发生的事。这条正则回答的是「这串东西看起来是不是一个手机号」，仅此而已。
+ */
+export const CONTACT_PHONE_PATTERN = /^1[3-9]\d{9}$/;
+
+export function isValidContactPhone(value: string): boolean {
+  return CONTACT_PHONE_PATTERN.test(value);
+}
+
+/** COMPLY-07 的年龄门槛。 */
+export const MIN_AGE_YEARS = 18;
+
+/**
+ * 是否已满 18 周岁。**由出生日期算**，不存「是否成年」布尔值 —— 后者会在用户生日
+ * 那天变成错的，而没有任何东西会去更新它。
+ *
+ * 定义在 @drift/contract 而不是各端各写一份：注册页要用它决定渲染不渲染法定终态
+ * 拒绝页，服务端要用它决定 403。两份实现的边界条件（生日当天、闰日）一旦不一致，
+ * 就会出现「界面放行、服务端拒绝」或者更糟的反向组合。
+ */
+export function isAdult(birthDate: string, now: Date = new Date()): boolean {
+  const born = new Date(`${birthDate}T00:00:00.000Z`);
+  if (Number.isNaN(born.getTime())) return false;
+  const eighteenth = new Date(born);
+  eighteenth.setUTCFullYear(eighteenth.getUTCFullYear() + MIN_AGE_YEARS);
+  return eighteenth.getTime() <= now.getTime();
+}

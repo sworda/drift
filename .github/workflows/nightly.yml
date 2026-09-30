@@ -1,0 +1,107 @@
+# 定时：L6 重跑 + resolved_model 日 diff + registered_users 日对账
+# （RESEARCH § Validation Architecture V.4）。
+#
+# 阻断规则与另两条不同：**失败发 IM 告警，不阻断合并**。但 model_snapshot 的
+# 变化必须在下一个 PR 前被人确认 —— 供应商把同一个 model id 背后的快照换掉时，
+# 对照组的可比性就已经断了，而没有任何测试会因此变红。
+
+name: nightly
+
+on:
+  schedule:
+    # 18:00 UTC = 次日 02:00 Asia/Shanghai（GitHub 的 cron 只认 UTC）。
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nightly:
+    runs-on: self-hosted
+    timeout-minutes: 60
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 启用 corepack
+        run: corepack enable
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 起测试库
+        run: docker compose up -d --wait postgres
+
+      - name: L6 危机探针集重跑
+        run: pnpm run test:probes
+
+      - name: resolved_model 日 diff
+        # 脚本已由 Plan 05 落地，所以这里是**直接调用**，不再有「文件不存在就报错」
+        # 的占位分支（SKIPPED_CHECKS.md 的 nightly-model-snapshot-diff 因此解除）。
+        #
+        # 这一步**没有**任何容错开关：nightly 整体允许不阻断合并，但脚本失败必须让
+        # job 红 —— 一条失败了还是绿的检查与一条不存在的检查没有区别。
+        #
+        # job summary 先写、再跑脚本：这样「变化必须在下一个 PR 前被人确认」这句话
+        # 在脚本失败的那一次也会出现在 summary 里，而不需要一个「失败也执行」的条件
+        # 表达式（那类构造在本仓库的 CI 里是被禁止的形状）。
+        #
+        # DATABASE_URL 在 shell 里拼而不是写在 `env:` 里：它要用的
+        # POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_HOST_PORT 是**自建 runner 进程
+        # 环境里**的值（compose 读的是同一组），而 workflow 级 `env:` 的表达式上下文
+        # 看不见 runner 的进程环境。故意不给 password 默认值 —— 缺了就连不上、立刻红。
+        run: |
+          {
+            echo "### resolved_model 日 diff"
+            echo ""
+            echo "厂商可以在不改 model id 的前提下把它背后的快照换掉（Anthropic 官方文档"
+            echo "书面承认服务侧基础设施变更会改变可观测行为），而这不会让任何测试变红。"
+            echo ""
+            echo "**model_snapshot 变化必须在下一个 PR 前被人确认。** 确认后人工修改"
+            echo "compliance/model-snapshot-baseline.json 并作为一次 commit 提交；"
+            echo "脚本不会自己改基线（自动更新会让告警自我消解）。"
+          } >> "$GITHUB_STEP_SUMMARY"
+          DATABASE_URL="postgres://${POSTGRES_USER:-drift}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB:-drift}" \
+            node tools/ci/model-snapshot-diff.mjs
+
+      - name: registered_users 日对账
+        # 脚本已由 Plan 13 落地，所以这里是**直接调用**，不再有「文件不存在就报错」的
+        # 占位分支（SKIPPED_CHECKS.md 的 nightly-publicness-reconcile 因此解除）。
+        #
+        # 判定方向是告警，不是自动写回：脚本没有任何写文件能力，也不动版本库。不相等或
+        # 超过上限时它非零退出并发 IM 告警，然后由**人工**更新 publicness.json 并新增一份
+        # 逐条裁决的 CHECKLIST —— 自动写回会绕过 D-08 的签字机制。
+        #
+        # DATABASE_URL 与上一步同样在 shell 里拼：它要用的 POSTGRES_* 是自建 runner 进程
+        # 环境里的值，而 workflow 级 env 的表达式上下文看不见它们。WECOM_WEBHOOK_URL 同样
+        # 来自本机环境（D-02：凭据只存在境内本机），缺了就在对账不通过时立刻红 ——
+        # 「告警其实没发出去」必须是一次失败，不能是一行日志。
+        run: |
+          {
+            echo "### registered_users 日对账"
+            echo ""
+            echo "git 声明的注册用户数（compliance/publicness.json）与数据库里 invite_code"
+            echo "中 used_by 非空的计数对账。不相等即告警；超过 10 时四条抗辩之一已破裂，"
+            echo "下一次 PR 会由 fast job 的 USERS_WITHIN_CAP 阻断发布。"
+            echo ""
+            echo "**脚本不会自己改 publicness.json。** 核实后人工更新它，并在同一次变更里"
+            echo "新增一份逐条裁决的 compliance/CHECKLIST-<日期>.md。"
+          } >> "$GITHUB_STEP_SUMMARY"
+          DATABASE_URL="postgres://${POSTGRES_USER:-drift}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB:-drift}" \
+            node tools/ci/publicness-reconcile.mjs
+
+      - name: 失败时发 IM 告警
+        if: failure()
+        # WECOM_WEBHOOK_URL 来自 self-hosted runner 本机的环境，**不从 GitHub
+        # Secrets 取**（D-02：凭据只存在境内本机）。没配就只留一行日志 ——
+        # 静默成功会让「告警其实没发出去」无人知晓。
+        run: |
+          if [ -z "${WECOM_WEBHOOK_URL:-}" ]; then
+            echo "WECOM_WEBHOOK_URL 未在本 runner 上配置，nightly 失败未发出告警。" >&2
+            exit 0
+          fi
+          curl -fsS -X POST "$WECOM_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"Drift nightly 失败：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}}"

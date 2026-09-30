@@ -1,0 +1,82 @@
+# L1 → L4 防线 + 全部负向 fixture（RESEARCH § Validation Architecture V.4）。
+#
+# ⚠️ 这条 workflow **必须能在 GitHub 托管 runner 上跑**，不依赖任何境内资源。
+# 理由：integration 跑在自建的境内 self-hosted runner 上（D-02），那台机器掉线
+# 时本条仍然是活的防线。因此这里不得引用任何 LLM_ / WECOM_ 前缀的 secret，
+# 也不得连接生产数据库。
+#
+# 任一步失败 → 阻断合并。
+
+name: fast
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: fast-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # corepack 首次会**交互式**询问是否下载 pnpm 12.6.0。不设这个变量的话
+      # job 会挂在提示符上直到超时 —— 一个没有任何错误信息的失败。
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # 与 package.json 的 engines.node 下限逐字一致。
+          node-version: 24.21.0
+
+      - name: 启用 corepack（pnpm 版本由 packageManager 字段锁定）
+        run: corepack enable
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: L1-L4（typecheck / lint / unit / contract）
+        run: pnpm run ci:fast
+
+      - name: 契约修订断言（Plan 01 的 13 条）
+        run: node tools/ci/check-contract-amendments.mjs
+
+      - name: COMPLY-10 公开性状态门（四条断言链）
+        # 四项状态（无公开注册入口 / 未上架 / 注册用户数 ≤ 10 / 无商业化）任一变化时，
+        # 必须在同一 diff 里新增一份逐条裁决过的 compliance/CHECKLIST-<日期>.md 并人工
+        # 更新 acknowledged_hash。**不得**在此加任何自动更新哈希的步骤 —— 自动更新会
+        # 绕过 D-08 的签字机制，把整个门禁变成装饰。
+        #
+        # 只跑 --check：--self-test（三个坏样例 + 一次注入证明四条断言非空真）由上一步
+        # ci:fast 里的 L4 契约测试用 spawn 驱动同一个 CLI，所以两处不会分叉，而这里
+        # 也就不需要第二次调用。
+        run: node tools/ci/publicness.mjs
+
+      - name: RES-03 publication DDL 静态扫描
+        # db/publication/research_publication.sql 是 publication 的唯一真相源。裸表名或
+        # 向量列即失败。动态检查（查 pg_publication_tables）在 Phase 1 无被测对象，脚本
+        # 会明确打印 SKIP DYNAMIC_PUBLICATION_CHECK —— 该 skip 已登记 SKIPPED_CHECKS.md
+        # 且带解除条件，另有一条 L4 断言守着那条登记存在。
+        run: node tools/ci/publication-scan.mjs
+
+      - name: COMPLY-11 登记与出口集合绑定（egress_hash）
+        # 出口集合变了而 compliance/no-unlabeled-output.md 没被重新复核 → 非零退出。
+        # 这是本仓库唯一一处 egress 哈希比对的**实现**：上一步的 ci:fast 里
+        # tools/ci/egress-registry.test.ts 用 spawn 驱动的就是这同一个 CLI，所以两处
+        # 不会分叉。**不得**在此加任何自动更新 egress_hash 的步骤 —— 自动更新会绕过
+        # 「出口变了就要重新确认无未标识输出」这个人工复核动作。
+        run: node tools/ci/egress-hash.mjs --check
+
+      - name: lockfile 与 workspace 未被安装过程改动
+        # pnpm 12 会自行往 pnpm-workspace.yaml 写 allowBuilds / minimumReleaseAgeExclude。
+        # 那种自动改动如果被默许，「装的东西与 lockfile 一致」这条就不再成立，
+        # 所以两个文件一起断言。
+        run: git diff --exit-code pnpm-lock.yaml pnpm-workspace.yaml

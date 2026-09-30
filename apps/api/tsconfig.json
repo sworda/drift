@@ -1,0 +1,33 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "emitDeclarationOnly": true,
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/contract"
+    },
+    {
+      "path": "../../packages/db"
+    },
+    {
+      "path": "../../packages/llm"
+    },
+    {
+      "path": "../../packages/prompts"
+    },
+    {
+      "path": "../../packages/safety"
+    }
+  ]
+}

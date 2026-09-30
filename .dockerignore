@@ -1,0 +1,19 @@
+# 构建上下文里不该出现的东西。node_modules 与 .next 会让上下文从几 MB 涨到
+# 几百 MB，而镜像里的依赖是由 pnpm install --frozen-lockfile 重新装的。
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+*.tsbuildinfo
+.git
+.github
+.gsd
+.planning
+.claude
+var
+# .env 含真实凭据，绝不进镜像层（镜像层是不可按行删除的存储位置，同 pino 日志）。
+.env
+.env.*
+!.env.example
